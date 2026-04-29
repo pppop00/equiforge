@@ -63,6 +63,8 @@ def load_slot_numerics(slots_path: Path) -> list[NumericToken]:
     data = json.loads(slots_path.read_text(encoding="utf-8"))
     out: list[NumericToken] = []
     for jpath, text in walk_strings(data, "card_slots"):
+        if jpath.endswith(".logo_asset_path"):
+            continue
         out.extend(extract_numerics(text, path=jpath))
     return out
 
