@@ -1,0 +1,1 @@
+../skills_repo/er/agents/edge_insight_writer.md
