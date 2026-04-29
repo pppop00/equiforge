@@ -1,4 +1,4 @@
-# Equity Fusion Skill
+# equiforge
 
 A portable AI skill pack that fuses two existing skills — **Equity Research** (multi-agent → interactive HTML research report) and **Equity Photo** (HTML → 6 fixed-layout PNG social cards) — into a single end-to-end workflow with a persistent SQLite knowledge base and a four-layer post-card audit.
 
@@ -13,7 +13,7 @@ A portable AI skill pack that fuses two existing skills — **Equity Research** 
 ## Repository layout
 
 ```
-equity-fusion/
+equiforge/
 ├── SKILL.md                 # ★ single orchestration entry — start here
 ├── MEMORY.md                # project invariants (gate IDs, tolerances, hard rules)
 ├── USER.md                  # per-user preferences (gitignored; copy from .template)
@@ -41,11 +41,11 @@ equity-fusion/
 ## Quick start
 
 ```bash
-git clone <this-repo-url> equity-fusion
-cd equity-fusion
+git clone <this-repo-url> equiforge
+cd equiforge
 git submodule update --init --recursive    # pull ER + EP submodules
 pip install -r requirements.txt
-python tools/db/migrate.py                 # build db/equity_kb.sqlite
+python equiforge.py init                   # build db/equity_kb.sqlite
 cp USER.md.template USER.md                # then edit defaults
 
 # Open the project in Claude Code / Cursor / etc., point the assistant at SKILL.md,
@@ -100,7 +100,7 @@ After a few runs, the database lets you:
 
 ## Status
 
-MVP — see `workflow_meta.json` for which phases are wired vs stubbed. The two upstream skills (`skills_repo/er`, `skills_repo/ep`) are pinned by SHA in `.gitmodules`; bumping those is a deliberate operation logged into `meta/submodule_shas.json` per run.
+The machine-readable orchestration contract is `workflow_meta.json` (phases, tools, agents, gates). Upstream skills (`skills_repo/er`, `skills_repo/ep`) are pinned by SHA via `.gitmodules`; submodule bumps are deliberate and logged in `meta/submodule_shas.json` per run.
 
 ## License
 

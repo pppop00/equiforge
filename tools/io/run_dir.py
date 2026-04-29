@@ -25,10 +25,8 @@ DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "output"
 SUBFOLDERS = (
     "meta",
     "research",
-    "research/transcripts",
     "cards",
     "cards/logo",
-    "cards/transcripts",
     "validation",
     "validation/ocr_dump",
     "db_export",

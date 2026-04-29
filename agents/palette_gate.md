@@ -45,7 +45,7 @@ Accept exact match (case-insensitive) of one of the four values. Anything else â
 }
 ```
 
-Append to `meta/gates.json`. The orchestrator passes this value to **both** `tools/photo/validate_cards.py --palette` and `tools/photo/render_cards.py --palette` for every card render in this run.
+`source` is a closed enum: exactly `user_response` or `USER.md sticky`. Do **not** invent values like `auto_mode_default`, `assumed`, or `inferred`. Auto-mode is not a license to skip this gate â€” palette propagates through 6 PNGs and a wrong choice means a full re-render. If the user has not replied and no sticky default exists, halt and wait. The orchestrator passes this value to **both** `tools/photo/validate_cards.py --palette` and `tools/photo/render_cards.py --palette` for every card render in this run.
 
 ## Single-card re-render trap
 

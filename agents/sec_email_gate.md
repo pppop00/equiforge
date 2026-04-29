@@ -63,6 +63,8 @@ Accept `no email`, `decline`, `not now`, `不提供`, `不提供邮箱`, `no_ema
 
 Append to `meta/gates.json`. **The email itself is never written to `db/equity_kb.sqlite`** — see `MEMORY.md` privacy invariants.
 
+`source` is a closed enum: `user_response`, `USER.md sticky`, or `skipped` (only when `applies_when` returns false). Auto-mode is not a license to skip this gate — never invent values like `auto_mode_default`. If the user has not replied and no sticky default exists and `applies_when` is true, halt and wait.
+
 ## Pass-down to Agent 1
 
 When delegating to `skills_repo/er/agents/financial_data_collector.md`, include exactly one line in the task prompt:

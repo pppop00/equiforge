@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 name: single_prompt_run
-description: One-prompt end-to-end procedure. Slash-command equivalent of "run the whole equity-fusion workflow on this prompt".
+description: One-prompt end-to-end procedure. Slash-command equivalent of "run the whole equiforge workflow on this prompt".
 when_to_use: User gives a single research prompt (e.g. "研究一下苹果", "research Apple", "build cards for Tencent")
 requires_toolsets: ["research", "photo", "audit", "db", "web", "io"]
 ---
@@ -38,4 +38,4 @@ After step 10, return to the user (in `report_language`):
 
 ## Resume
 
-If the user invokes this on an existing run dir (`equity-fusion run --resume <run_id>`), read `meta/run.jsonl` and skip phases whose `phase_exit` event already exists with valid output artifacts.
+If the user invokes this on an existing run dir (`equiforge run --resume <run_id>`), read `meta/run.jsonl` and skip phases whose `phase_exit` event already exists with valid output artifacts.

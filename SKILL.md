@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-name: equity-fusion
+name: equiforge
 description: |
   End-to-end skill: one prompt ("研究一下苹果" / "research Apple") drives the full pipeline —
   language gate, SEC email gate, palette gate, ER research (multi-agent), EP card generation,
@@ -15,7 +15,7 @@ when_to_use: |
 requires_toolsets: ["research", "photo", "audit", "db", "web", "io"]
 ---
 
-# Equity Fusion Skill
+# equiforge
 
 You are the orchestrator. Read this file once at session start, then read `MEMORY.md` and `USER.md` (if present), then read `agents/orchestrator.md` for the runtime brief.
 
@@ -43,7 +43,7 @@ After the run, `db/equity_kb.sqlite` has new rows for this ticker + period that 
    - If the phase has a `tool`: invoke the Python script. If it has an `agent`: delegate to a fresh subagent context, scoped to the toolsets listed in the agent's frontmatter.
    - For `parallelism: parallel` phases, dispatch all listed agents simultaneously; respect `subagent_concurrency_cap` from `workflow_meta.json`.
    - On success: append `phase_exit` with the produced artifacts. On failure: append `phase_failed` with the error and follow the phase's `retry_to` / `retry_cap` policy.
-4. **Stop and ask the user** at each `blocking: true, interactive: true` gate. Use the gate agent's prompt verbatim (in the user's language). Record the answer in `meta/gates.json` with `source: "user_response"` or `"USER.md sticky"`.
+4. **Stop and ask the user** at each `blocking: true, interactive: true` gate. The three P0 gates — **P0_lang, P0_sec_email, P0_palette** — are at the same level: each must block on a real user reply or a sticky default in `USER.md`. Auto-mode does **not** waive them; do not invent a default to keep moving. Use the gate agent's prompt verbatim (in the user's language). Record the answer in `meta/gates.json` with `source: "user_response"` or `"USER.md sticky"` (plus the gate-specific extras whitelisted in each agent — never invent new source values).
 5. **Never skip P12** unless the user explicitly says so in the same turn. P12 is the paying-customer audit gate — its four layers (reconcile / OCR / web / DB) are described in `agents/post_card_auditor.md`.
 6. **After P12 passes**, run `P_DB_INDEX` (`tools/db/index_run.py`) to write into the database. If P12 failed, surface the report and ask the user which upstream phase to re-run; do not write to DB.
 

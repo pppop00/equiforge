@@ -54,6 +54,8 @@ Write to `meta/gates.json`:
 }
 ```
 
+`source` is a closed enum: `user_response`, `USER.md sticky`, or `explicit_phrase`. Auto-mode is not a license to skip this gate — never invent values like `auto_mode_default` or `inferred`. If the user has not replied and no sticky/explicit-phrase match applies, halt and wait.
+
 ## Forbidden
 
 - Inferring language from the chat language ("user wrote in Chinese, so report in Chinese").

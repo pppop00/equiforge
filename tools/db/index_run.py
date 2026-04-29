@@ -61,6 +61,46 @@ def _g(d: Any, *keys, default=None) -> Any:
     return d
 
 
+def _num(x: Any) -> Optional[float]:
+    """Coerce to float; return None if missing or not numeric."""
+    if x is None:
+        return None
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, (int, float)):
+        return float(x)
+    if isinstance(x, str):
+        try:
+            return float(x.replace(",", "").strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _safe_pct(numer: Any, denom: Any) -> Optional[float]:
+    """numer/denom * 100, with None on missing or zero denominator."""
+    n, d = _num(numer), _num(denom)
+    if n is None or d is None or d == 0:
+        return None
+    return n / d * 100.0
+
+
+def _eps_growth(curr: Any, prior: Any) -> Optional[float]:
+    """EPS growth in pct. Returns None if prior is non-positive (sign change is not a percentage)."""
+    n, d = _num(curr), _num(prior)
+    if n is None or d is None or d <= 0:
+        return None
+    return (n - d) / d * 100.0
+
+
+def _first(*candidates: Any) -> Any:
+    """Return the first non-None argument; preserves zero/falsy numeric values."""
+    for c in candidates:
+        if c is not None:
+            return c
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Slot inference
 # ─────────────────────────────────────────────────────────────────────
@@ -220,11 +260,64 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
 
             # financials_period
             cy = _g(fd, "income_statement", "current_year") or {}
+            py_is = _g(fd, "income_statement", "prior_year") or {}
             bs = _g(fd, "balance_sheet") or {}
             cf = _g(fd, "cash_flow") or {}
+            # ER's financial_analysis.json uses nested sections (profitability/growth/
+            # cash_flow/leverage/valuation). Field names also vary by writer (NVDA uses
+            # roic_current_pct + diluted_eps_growth_yoy_pct; Macy uses ev_to_ebitda etc.).
+            # Read all known variants. metrics_map kept as legacy fallback.
+            fa_prof = _g(fa, "profitability") or {}
+            fa_growth = _g(fa, "growth") or {}
+            fa_cf = _g(fa, "cash_flow") or {}
+            fa_lev = _g(fa, "leverage") or {}
+            fa_val = _g(fa, "valuation") or {}
             metrics_map = {m.get("name"): m.get("value") for m in (_g(fa, "metrics", default=[]) or []) if isinstance(m, dict)}
 
             data_source = _scrub_email(_g(fd, "data_source"))
+
+            # Derived fields. Order: ER analysis section → financial_data current_year
+            # (Macy's writer puts margins here with `_pct` suffix) → raw derivation →
+            # legacy metrics_map. yoy uses prior_year subtraction as last resort.
+            revenue_cy = cy.get("revenue") or cy.get("total_revenue")
+            py_revenue = py_is.get("revenue") or py_is.get("total_revenue")
+            py_ni = py_is.get("net_income")
+            cy_ni = cy.get("net_income")
+            cy_eps = cy.get("diluted_eps") or cy.get("eps")
+            py_eps = py_is.get("diluted_eps") or py_is.get("eps")
+
+            gross_margin_v = _first(fa_prof.get("gross_margin_current"), fa_prof.get("gross_margin_pct"),
+                                    cy.get("gross_margin"), cy.get("gross_margin_pct"),
+                                    _safe_pct(cy.get("gross_profit"), revenue_cy))
+            operating_margin_v = _first(fa_prof.get("operating_margin_current"), fa_prof.get("operating_margin_pct"),
+                                        cy.get("operating_margin"), cy.get("operating_margin_pct"),
+                                        _safe_pct(cy.get("operating_income"), revenue_cy))
+            net_margin_v = _first(fa_prof.get("net_margin_current"), fa_prof.get("net_margin_pct"),
+                                  cy.get("net_margin"), cy.get("net_margin_pct"),
+                                  _safe_pct(cy_ni, revenue_cy))
+            yoy_revenue_v = _first(fa_growth.get("revenue_growth_yoy_pct"),
+                                   _g(fd, "income_statement", "yoy_revenue_pct"), cy.get("yoy_revenue_pct"),
+                                   _safe_pct(_num(revenue_cy) - _num(py_revenue)
+                                             if revenue_cy is not None and py_revenue is not None else None,
+                                             py_revenue))
+            yoy_ni_v = _first(fa_growth.get("net_income_growth_yoy_pct"),
+                              _g(fd, "income_statement", "yoy_net_income_pct"), cy.get("yoy_net_income_pct"),
+                              _safe_pct(_num(cy_ni) - _num(py_ni)
+                                        if cy_ni is not None and py_ni is not None else None,
+                                        py_ni))
+            roic_v = _first(fa_prof.get("roic_current_pct"), fa_prof.get("roic_pct"), fa_prof.get("roic_current"),
+                            metrics_map.get("ROIC"), metrics_map.get("roic_pct"))
+            fcf_margin_v = _first(fa_cf.get("fcf_margin_pct"), fa_cf.get("fcf_margin_current"),
+                                  metrics_map.get("FCF margin"), metrics_map.get("fcf_margin_pct"),
+                                  _safe_pct(cf.get("free_cash_flow"), revenue_cy))
+            debt_ebitda_v = _first(fa_lev.get("net_debt_to_ebitda"), fa_lev.get("net_debt_ebitda"),
+                                   fa_lev.get("debt_to_ebitda"),
+                                   metrics_map.get("Debt/EBITDA"), metrics_map.get("debt_to_ebitda"))
+            ev_ebitda_v = _first(fa_val.get("ev_to_ebitda"), fa_val.get("ev_ebitda"),
+                                 metrics_map.get("EV/EBITDA"), metrics_map.get("ev_ebitda"))
+            eps_growth_v = _first(fa_growth.get("eps_growth_yoy_pct"), fa_growth.get("diluted_eps_growth_yoy_pct"),
+                                  metrics_map.get("EPS growth"), _g(fa, "growth", "eps_growth_pct"),
+                                  _eps_growth(cy_eps, py_eps))
 
             conn.execute(
                 """INSERT OR REPLACE INTO financials_period (
@@ -253,17 +346,16 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
                     cy.get("total_opex"),
                     cy.get("operating_income"), cy.get("net_income"),
                     cy.get("diluted_eps") or cy.get("eps"), cy.get("diluted_shares"),
-                    cy.get("gross_margin"), cy.get("operating_margin"), cy.get("net_margin"),
-                    _g(fd, "income_statement", "yoy_revenue_pct"),
-                    _g(fd, "income_statement", "yoy_net_income_pct"),
+                    gross_margin_v, operating_margin_v, net_margin_v,
+                    yoy_revenue_v, yoy_ni_v,
                     bs.get("cash_and_equivalents"), bs.get("total_assets"),
                     bs.get("total_debt"), bs.get("total_equity"), bs.get("shares_outstanding"),
                     cf.get("operating_cash_flow"), cf.get("capex"), cf.get("free_cash_flow"),
-                    metrics_map.get("ROIC") or metrics_map.get("roic_pct"),
-                    metrics_map.get("FCF margin") or metrics_map.get("fcf_margin_pct"),
-                    metrics_map.get("Debt/EBITDA"),
-                    metrics_map.get("EV/EBITDA"),
-                    metrics_map.get("EPS growth") or _g(fa, "growth", "eps_growth_pct"),
+                    roic_v,
+                    fcf_margin_v,
+                    debt_ebitda_v,
+                    ev_ebitda_v,
+                    eps_growth_v,
                     _g(fd, "currency"), _g(fd, "unit"),
                     data_source, _g(fd, "data_confidence"), _g(fd, "source_filing_url"),
                     run_id,
