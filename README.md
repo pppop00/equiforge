@@ -1,0 +1,107 @@
+# Equity Fusion Skill
+
+A portable AI skill pack that fuses two existing skills — **Equity Research** (multi-agent → interactive HTML research report) and **Equity Photo** (HTML → 6 fixed-layout PNG social cards) — into a single end-to-end workflow with a persistent SQLite knowledge base and a four-layer post-card audit.
+
+**One prompt → full delivery.** Type "研究一下苹果" (or "research Apple"); the harness runs language gate → SEC email gate → palette gate → research pipeline → card pipeline → final audit, and lands a per-run output folder with research JSON, the HTML report, the 6 PNG cards, the QA report, and a snapshot of the rows written to the local database.
+
+## What's distinctive
+
+- **Portable** — markdown agents + Python tools. Runs in Claude Code, Cursor, or any host that can read markdown briefs and execute Python. No runtime lock-in.
+- **Audited** — every run produces a `meta/run.jsonl` event log, frozen system prompt, submodule SHAs, and a four-layer P12 audit (numerical reconciliation + PNG OCR + web third-check + DB cross-validation).
+- **Cumulative** — every successful run writes financials, macro factors, Porter scores, prediction waterfalls, intelligence signals, and disclosure quirks into `db/equity_kb.sqlite` (SQLite + FTS5). Next quarter's Apple run reuses last quarter's Apple data; Apple's run can be cross-checked against Samsung if Samsung is in the DB.
+
+## Repository layout
+
+```
+equity-fusion/
+├── SKILL.md                 # ★ single orchestration entry — start here
+├── MEMORY.md                # project invariants (gate IDs, tolerances, hard rules)
+├── USER.md                  # per-user preferences (gitignored; copy from .template)
+├── workflow_meta.json       # machine-readable phase/gate contract
+├── agents/                  # subagent briefs (markdown)
+├── skills/                  # procedural how-tos (markdown)
+├── tools/                   # Python CLIs (research/, photo/, audit/, db/, web/, io/)
+├── skills_repo/             # git submodules
+│   ├── er/   → Equity Research Skill
+│   └── ep/   → Equity Photo Skill
+├── db/
+│   ├── equity_kb.sqlite     # gitignored; built from db/schema/*.sql
+│   ├── schema/              # numbered SQL migrations
+│   └── sector_reports/      # cross-company analytical reports
+├── tests/                   # pytest suite
+└── output/                  # gitignored; one folder per run
+    └── {Company}_{Date}_{RunID}/
+        ├── meta/            # run.jsonl, frozen system prompt, gates, submodule SHAs
+        ├── research/        # ER artifacts (JSON + HTML)
+        ├── cards/           # EP artifacts (card_slots.json + 6 PNGs + logo)
+        ├── validation/      # P12 four-layer audit
+        └── db_export/       # snapshot of rows written this run
+```
+
+## Quick start
+
+```bash
+git clone <this-repo-url> equity-fusion
+cd equity-fusion
+git submodule update --init --recursive    # pull ER + EP submodules
+pip install -r requirements.txt
+python tools/db/migrate.py                 # build db/equity_kb.sqlite
+cp USER.md.template USER.md                # then edit defaults
+
+# Open the project in Claude Code / Cursor / etc., point the assistant at SKILL.md,
+# then type:  研究一下苹果   (or)   research Apple
+```
+
+## How it works
+
+12 phases, three of which block on user input (language, SEC email if US-listed, palette). Everything else is autonomous.
+
+```
+P0_intent → P0_lang → P0_sec_email → P0_palette → P0M_meta → P0_DB_PRECHECK
+  → P1 parallel research (financial / macro / news, 3 subagents)
+  → P1.5 edge insight
+  → P2 financial analysis
+  → P2.5 prediction waterfall
+  → P2.6 macro QC peer A/B (parallel)
+  → P3 Porter analysis
+  → P3.5 Porter QC peer A/B (parallel)
+  → P3.6 QC resolution merge
+  → P3.7 cross-validation (history / peer / macro drift)
+  → P4 Sankey payload
+  → P5 HTML report writer (locked SHA256-pinned template)
+  → P5.5 final data validator (CFA-level)
+  → P6 report validator + packaging profile
+  → P7 logo production (≥840px wide; saved to output dir first)
+  → P8 card content production
+  → P8.5 hardcode/logic audit
+  → P9 layout fill (char/pixel budgets)
+  → P10 Validator 1 (scripts/validate_cards.py)
+  → P10.5 Validator 2 (web fact-check; loops back to P10 ≤3×)
+  → P11 render 6 PNGs (2160×2700)
+  → P12 final audit: reconcile + OCR + web third + DB cross  ★ paying-customer gate
+  → P_DB_INDEX writes everything into db/equity_kb.sqlite
+```
+
+See `workflow_meta.json` for the machine-readable contract and `agents/orchestrator.md` for the runtime brief.
+
+## Cross-quarter and cross-company reuse
+
+After a few runs, the database lets you:
+
+- **Skip macro re-collection** — if a run for *any* US-listed company in 2026Q2 has already collected the 6-factor US macro vector, the next 14 days of US runs short-circuit `macro_scanner` and pull from DB.
+- **Cross-validate against history** — running Apple in Q3 will compare the new financials against Apple's Q1/Q2 rows already in DB; YoY > 5pp delta from reported flags as CRITICAL.
+- **Cross-validate against peers** — Apple's Porter `rivalry=3` while Samsung (DB) is `5`: P12 flags as a peer-divergence warning for analyst review.
+- **Generate sector reports** — `python tools/db/sector_report.py --type porter_heatmap --sector "Information Technology" --period 2026Q2` produces a force × peer matrix HTML+JSON.
+
+## Privacy
+
+- SEC EDGAR User-Agent emails are never persisted. They live for the duration of one HTTP request only.
+- `tests/test_db_pii.py` asserts that no row in any TEXT column matches an email regex after a known-input fixture run.
+
+## Status
+
+MVP — see `workflow_meta.json` for which phases are wired vs stubbed. The two upstream skills (`skills_repo/er`, `skills_repo/ep`) are pinned by SHA in `.gitmodules`; bumping those is a deliberate operation logged into `meta/submodule_shas.json` per run.
+
+## License
+
+Apache-2.0, matching both upstream skills.

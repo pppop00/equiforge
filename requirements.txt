@@ -1,0 +1,23 @@
+# Equity Fusion Skill — runtime dependencies
+# Python 3.9+
+
+# Inherited from ER (workflow_meta validation, etc.)
+# (none beyond stdlib for ER scripts)
+
+# Inherited from EP (renderer + validator)
+beautifulsoup4>=4.12
+Pillow>=10.0
+
+# DB layer — sqlite3 is stdlib; FTS5 is built into stdlib SQLite >= 3.20
+
+# P12 audit
+# OCR — pick one per platform. PaddleOCR handles CN+EN well; Tesseract is lightweight.
+# Both are optional at install time; tools/audit/ocr_cards.py picks whichever is available.
+# paddleocr>=2.7              # CN-strong; uncomment to use
+pytesseract>=0.3.10           # EN-default; requires `brew install tesseract` (macOS) or apt-get install tesseract-ocr
+
+# Web fact-check (Validator 2 + P12 layer 3)
+requests>=2.31
+
+# Tests
+pytest>=7.4

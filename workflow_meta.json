@@ -1,0 +1,340 @@
+{
+  "schema_version": "1.0.0",
+  "name": "equity-fusion",
+  "description": "End-to-end equity research + social card pipeline with persistent knowledge base and four-layer audit. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
+  "phases": [
+    {
+      "id": "P0_intent",
+      "produces": ["meta/run.json:ticker", "meta/run.json:company", "meta/run.json:listing"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "agents/intent_resolver.md",
+      "tools": ["tools/web/search.py"],
+      "fail_action": "ask user to provide ticker explicitly"
+    },
+    {
+      "id": "P0_lang",
+      "produces": ["meta/run.json:report_language"],
+      "blocking": true,
+      "interactive": true,
+      "parallelism": "sequential",
+      "agent": "agents/language_gate.md",
+      "values": ["en", "zh"],
+      "sticky_source": "USER.md:default_language"
+    },
+    {
+      "id": "P0_sec_email",
+      "produces": ["meta/run.json:sec_email", "meta/run.json:sec_user_agent"],
+      "blocking": true,
+      "interactive": true,
+      "parallelism": "sequential",
+      "agent": "agents/sec_email_gate.md",
+      "applies_when": "listing == 'US' and mode == 'A'",
+      "sticky_source": "USER.md:default_sec_email"
+    },
+    {
+      "id": "P0_palette",
+      "produces": ["meta/run.json:palette"],
+      "blocking": true,
+      "interactive": true,
+      "parallelism": "sequential",
+      "agent": "agents/palette_gate.md",
+      "values": ["macaron", "default", "b", "c"],
+      "sticky_source": "USER.md:default_palette"
+    },
+    {
+      "id": "P0M_meta",
+      "produces": ["meta/workflow_meta.snapshot.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/research/validate_workflow_meta.py"
+    },
+    {
+      "id": "P0_DB_PRECHECK",
+      "produces": ["db_export/peer_context.json", "db_export/prior_financials_used.json"],
+      "blocking": false,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/db/queries.py",
+      "purpose": "Check DB for prior runs of this ticker, peer companies in same sector/geography, and a fresh (<14d) macro snapshot to short-circuit P1 macro_scanner."
+    },
+    {
+      "id": "P1_parallel_research",
+      "produces": ["research/financial_data.json", "research/macro_factors.json", "research/news_intel.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "parallel",
+      "concurrency": 3,
+      "agents": [
+        "skills_repo/er/agents/financial_data_collector.md",
+        "skills_repo/er/agents/macro_scanner.md",
+        "skills_repo/er/agents/news_researcher.md"
+      ],
+      "short_circuits": {
+        "macro_scanner": "if P0_DB_PRECHECK returns a fresh macro_snapshot for primary_geography, skip web collection and reuse"
+      }
+    },
+    {
+      "id": "P1_5_edge",
+      "produces": ["research/edge_insights.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/er/agents/edge_insight_writer.md"
+    },
+    {
+      "id": "P2_fin_analysis",
+      "produces": ["research/financial_analysis.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential"
+    },
+    {
+      "id": "P2_5_waterfall",
+      "produces": ["research/prediction_waterfall.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential"
+    },
+    {
+      "id": "P2_6_qc_macro",
+      "produces": ["research/qc_macro_peer_a.json", "research/qc_macro_peer_b.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "parallel",
+      "concurrency": 2,
+      "agents": [
+        "skills_repo/er/agents/qc_macro_peer_a.md",
+        "skills_repo/er/agents/qc_macro_peer_b.md"
+      ]
+    },
+    {
+      "id": "P3_porter",
+      "produces": ["research/porter_analysis.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential"
+    },
+    {
+      "id": "P3_5_qc_porter",
+      "produces": ["research/qc_porter_peer_a.json", "research/qc_porter_peer_b.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "parallel",
+      "concurrency": 2,
+      "agents": [
+        "skills_repo/er/agents/qc_porter_peer_a.md",
+        "skills_repo/er/agents/qc_porter_peer_b.md"
+      ]
+    },
+    {
+      "id": "P3_6_qc_merge",
+      "produces": ["research/qc_audit_trail.json"],
+      "side_effects": ["in-place updates to research/prediction_waterfall.json and research/porter_analysis.json adding qc_deliberation"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/er/agents/qc_resolution_merge.md"
+    },
+    {
+      "id": "P3_7_X_VALIDATE",
+      "produces": ["research/cross_validation.json"],
+      "blocking": false,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "agents/cross_validator.md",
+      "tool": "tools/audit/db_cross_validate.py",
+      "rules": [
+        "self_history_yoy_consistency: CRITICAL if recomputed YoY deviates >5pp from reported",
+        "segment_drift: WARNING if any segment pct_of_total shifts >15pp without disclosure_quirks explaining basis change",
+        "peer_porter_divergence: WARNING if focal differs from peer median by >=2 with <2 peers agreeing",
+        "macro_factor_drift: WARNING if same (geography, period) factor differs >0.5pp from prior or beta differs >0.2",
+        "predicted_vs_prior_actual: WARNING (calibration data; never blocks)",
+        "sector_macro_identity: CRITICAL only in mode==A — same (geography, period) macro vector should match across peers"
+      ]
+    },
+    {
+      "id": "P4_sankey",
+      "produces": ["research/financial_analysis.json:sankey"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential"
+    },
+    {
+      "id": "P5_html",
+      "produces": ["research/_locked_skeleton.html", "research/{Company}_Research_{LANG}.html"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/research/extract_template.py",
+      "agents": ["skills_repo/er/agents/report_writer_cn.md", "skills_repo/er/agents/report_writer_en.md"]
+    },
+    {
+      "id": "P5_5_data_val",
+      "produces": ["research/final_report_data_validation.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/er/agents/final_report_data_validator.md",
+      "retry_to": "P5_html",
+      "retry_cap": 2
+    },
+    {
+      "id": "P6_pkg",
+      "produces": ["research/report_validation.txt", "research/structure_conformance.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/er/agents/report_validator.md",
+      "tool": "tools/research/packaging_check.py",
+      "packaging_profiles": [
+        "strict_18_full_qc_secapi",
+        "strict_17_full_qc_no_secapi",
+        "strict_13_fast_no_qc_secapi",
+        "strict_12_fast_no_qc_no_secapi"
+      ]
+    },
+    {
+      "id": "P7_logo",
+      "produces": ["cards/logo/{slug}_wordmark.png", "cards/{stem}.card_slots.json:logo_asset_path", "cards/{stem}.card_slots.json:cover_company_name_cn"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/ep/agents/logo-production-agent.md",
+      "hard_rule": "Save logo INTO the per-run cards/ directory before setting logo_asset_path. Folder must exist first."
+    },
+    {
+      "id": "P8_content",
+      "produces": ["cards/{stem}.card_slots.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/ep/agents/content-production-agent.md"
+    },
+    {
+      "id": "P8_5_hardcode",
+      "produces": ["cards/{stem}.card_slots.json (audited)"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/ep/agents/hardcode-audit-agent.md"
+    },
+    {
+      "id": "P9_layout",
+      "produces": ["cards/{stem}.card_slots.json (compressed)"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/ep/agents/layout-fill-agent.md"
+    },
+    {
+      "id": "P10_validator1",
+      "produces": ["cards/validator1_report.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/photo/validate_cards.py"
+    },
+    {
+      "id": "P10_5_validator2",
+      "produces": ["cards/validator2_report.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "skills_repo/ep/agents/validator-2-agent.md",
+      "retry_to": "P10_validator1",
+      "retry_cap": 3
+    },
+    {
+      "id": "P11_render",
+      "produces": ["cards/01_cover.png", "cards/02_background_industry.png", "cards/03_revenue.png", "cards/04_business_outlook.png", "cards/05_brand.png", "cards/06_post_copy.png"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/photo/render_cards.py",
+      "constraint": "palette must equal P0_palette"
+    },
+    {
+      "id": "P12_final_audit",
+      "produces": [
+        "validation/post_card_audit.json",
+        "validation/QA_REPORT.md",
+        "validation/reconciliation.csv",
+        "validation/ocr_dump/card_{1..6}.txt",
+        "validation/web_third_check.json",
+        "validation/db_cross.json"
+      ],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "agent": "agents/post_card_auditor.md",
+      "layers": [
+        {
+          "name": "reconcile_numbers",
+          "tool": "tools/audit/reconcile_numbers.py",
+          "fail_blocks": true
+        },
+        {
+          "name": "ocr_cards",
+          "tool": "tools/audit/ocr_cards.py",
+          "fail_blocks": true
+        },
+        {
+          "name": "web_third_check",
+          "tool": "tools/audit/web_third_check.py",
+          "top_n": 3,
+          "fail_blocks": true
+        },
+        {
+          "name": "db_cross_validate",
+          "tool": "tools/audit/db_cross_validate.py",
+          "fail_blocks": false,
+          "cold_start_ok": true
+        }
+      ]
+    },
+    {
+      "id": "P_DB_INDEX",
+      "produces": [
+        "db_export/rows_written.json",
+        "db_export/peer_context.json",
+        "db_export/prior_financials_used.json",
+        "db_export/db_index_summary.json"
+      ],
+      "blocking": false,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/db/index_run.py",
+      "runs_after": "P12_final_audit",
+      "transactional": true,
+      "on_failure": "rollback; mark runs.run_status='failed'; still admit append-only tables (intelligence_signals, disclosure_quirks)"
+    }
+  ],
+  "default_cleanup_targets": [
+    "tmp_*",
+    "*.tmp",
+    "debug_*",
+    "companyfacts_*.json",
+    "*_10k.html"
+  ],
+  "subagent_concurrency_cap": 3,
+  "subagent_timeouts_seconds": {
+    "research": 600,
+    "photo": 300,
+    "qc": 180,
+    "audit": 240
+  },
+  "submodules": {
+    "skills_repo/er": {
+      "purpose": "Equity Research Skill — full ER pipeline P1..P6"
+    },
+    "skills_repo/ep": {
+      "purpose": "Equity Photo Skill — card pipeline P7..P11"
+    }
+  },
+  "memory_files": ["MEMORY.md", "USER.md"],
+  "freeze_system_prompt_at": "session_start",
+  "system_prompt_audit_path": "meta/system_prompt.frozen.txt"
+}

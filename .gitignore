@@ -1,0 +1,40 @@
+# Per-user runtime state
+USER.md
+
+# Local database
+db/equity_kb.sqlite
+db/equity_kb.sqlite-*
+db/*.db
+db/*.sqlite
+db/*.sqlite-journal
+db/*.sqlite-wal
+db/*.sqlite-shm
+
+# Per-run outputs
+output/
+
+# Sector reports rebuild on demand
+db/sector_reports/*/
+!db/sector_reports/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
