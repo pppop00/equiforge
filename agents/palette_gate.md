@@ -18,14 +18,14 @@ In `report_language`:
 
 **EN:**
 > Which card palette should we use? Reply with one of:
-> - `macaron` — warm cream canvas, dark header, pastel accents (recommended default)
+> - `macaron` — warm cream canvas, dark header, pastel accents
 > - `default` — gray-white canvas, light header, red-orange accents (legacy)
 > - `b` — soft violet canvas, light header, purple/emerald accents (Xiaohongshu-friendly)
 > - `c` — warm paper canvas, dark header, magazine style
 
 **ZH:**
 > 卡片配色用哪一组？回复以下之一：
-> - `macaron` — 暖米色背景 + 深色头部 + 马卡龙强调色（推荐）
+> - `macaron` — 暖米色背景 + 深色头部 + 马卡龙强调色
 > - `default` — 灰白背景 + 浅色头部 + 红橙强调（旧版）
 > - `b` — 浅紫背景 + 浅色头部 + 紫色/翠绿强调（小红书风）
 > - `c` — 暖纸色背景 + 深色头部（杂志风）

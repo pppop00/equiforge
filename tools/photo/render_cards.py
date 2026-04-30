@@ -1,6 +1,6 @@
 """Run EP's renderer (skills_repo/ep/scripts/generate_social_cards.py).
 
-Always pass the SAME --palette as Validator 1 used. Default --output-root is the
+Always pass the SAME P0-confirmed --palette as Validator 1 used. Default --output-root is the
 per-run cards/ directory.
 
 Usage:
@@ -8,7 +8,7 @@ Usage:
         --input <run_dir>/research/Apple_Research_CN.html \
         --slots <run_dir>/cards/Apple_Research_CN.card_slots.json \
         --brand "金融豹" \
-        --palette macaron \
+        --palette <confirmed_palette> \
         --output-root <run_dir>/cards
 """
 from __future__ import annotations

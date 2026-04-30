@@ -8,7 +8,7 @@ Usage:
         --input <run_dir>/research/Apple_Research_CN.html \
         --slots <run_dir>/cards/Apple_Research_CN.card_slots.json \
         --brand "金融豹" \
-        --palette macaron
+        --palette <confirmed_palette>
 """
 from __future__ import annotations
 
