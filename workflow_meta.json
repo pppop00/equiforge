@@ -89,14 +89,18 @@
       "produces": ["research/financial_analysis.json"],
       "blocking": true,
       "interactive": false,
-      "parallelism": "sequential"
+      "parallelism": "sequential",
+      "inline": true,
+      "executor_note": "Run by orchestrator with research+io toolsets; no dedicated subagent."
     },
     {
       "id": "P2_5_waterfall",
       "produces": ["research/prediction_waterfall.json"],
       "blocking": true,
       "interactive": false,
-      "parallelism": "sequential"
+      "parallelism": "sequential",
+      "inline": true,
+      "executor_note": "Run by orchestrator with research+io toolsets; no dedicated subagent."
     },
     {
       "id": "P2_6_qc_macro",
@@ -115,7 +119,9 @@
       "produces": ["research/porter_analysis.json"],
       "blocking": true,
       "interactive": false,
-      "parallelism": "sequential"
+      "parallelism": "sequential",
+      "inline": true,
+      "executor_note": "Three perspectives × five forces; orchestrator-level inline phase."
     },
     {
       "id": "P3_5_qc_porter",
@@ -160,16 +166,30 @@
       "produces": ["research/financial_analysis.json:sankey"],
       "blocking": true,
       "interactive": false,
-      "parallelism": "sequential"
+      "parallelism": "sequential",
+      "inline": true,
+      "executor_note": "Inject Sankey payload into financial_analysis.json; no subagent needed."
     },
     {
       "id": "P5_html",
-      "produces": ["research/_locked_skeleton.html", "research/{Company}_Research_{LANG}.html"],
+      "produces": ["research/_locked_{lang}_skeleton.html", "research/{Company}_Research_{LANG}.html"],
       "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
       "tool": "tools/research/extract_template.py",
-      "agents": ["skills_repo/er/agents/report_writer_cn.md", "skills_repo/er/agents/report_writer_en.md"]
+      "agents": ["skills_repo/er/agents/report_writer_cn.md", "skills_repo/er/agents/report_writer_en.md"],
+      "hard_rule": "Final HTML must be produced by filling the extracted locked skeleton only; simplified hand-written HTML is invalid."
+    },
+    {
+      "id": "P5_html_gate",
+      "produces": ["research/structure_conformance.json:html_template_gate"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "tool": "tools/research/validate_report_html.py",
+      "retry_to": "P5_html",
+      "retry_cap": 2,
+      "fail_action": "discard simplified HTML and rerun P5 from the extracted locked skeleton"
     },
     {
       "id": "P5_5_data_val",

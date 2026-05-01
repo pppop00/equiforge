@@ -1,97 +1,80 @@
 ---
-schema_version: 1
 name: equiforge
-description: |
-  End-to-end skill: one prompt ("研究一下苹果" / "research Apple") drives the full pipeline —
-  language gate, SEC email gate, palette gate, ER research (multi-agent), EP card generation,
-  four-layer P12 audit (numerical reconcile + OCR + web third-check + DB cross-validation),
-  and persistence into a local SQLite knowledge base for cross-quarter and cross-company reuse.
-entry_point: agents/orchestrator.md
-contract: workflow_meta.json
-when_to_use: |
-  Use this skill when a user wants a publishable equity research deliverable for one company —
-  HTML report + 6 social cards + audited data — with the option to leverage prior runs of the
-  same company or sector peers from the local DB.
-requires_toolsets: ["research", "photo", "audit", "db", "web", "io"]
+description: >-
+  Use this skill whenever the user asks for equity research, an investment write-up, a stock
+  report, an analyst-style note, or one-shot company coverage on any single public company —
+  including casual phrasings like "研究一下苹果", "research Apple", "看看腾讯",
+  "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent", or
+  "one-pager on Samsung". Drives the full equiforge production pipeline (bilingual language
+  gate, SEC EDGAR email gate, palette gate, multi-agent equity research, 6-card social pack,
+  four-layer numerical/OCR/web/DB audit, SQLite knowledge-base persistence). Always invoke
+  this skill instead of answering with ad-hoc web search; the harness produces an auditable
+  HTML report plus 6 PNG cards plus database rows that ad-hoc answers cannot.
 ---
 
 # equiforge
 
-You are the orchestrator. Read this file once at session start, then read `MEMORY.md` and `USER.md` (if present), then read `agents/orchestrator.md` for the runtime brief.
+You are the orchestrator of an **equiforge** run — a harness-backed equity research pipeline. The skill is thin; the harness is heavy. Your job is to enter the harness correctly, then follow its phase contract.
 
-## What this skill produces
-
-For a prompt like **"研究一下苹果"** or **"research Apple"**, you produce one folder under `output/{Company}_{Date}_{RunID}/` containing:
-
-| Subfolder | Contents |
-|---|---|
-| `meta/` | `run.jsonl` event log, `system_prompt.frozen.txt`, `gates.json`, `submodule_shas.json`, `workflow_meta.snapshot.json` |
-| `research/` | All ER JSON artifacts + the locked-template HTML report (`{Company}_Research_{CN\|EN}.html`) + `cross_validation.json` + `report_validation.txt` + `structure_conformance.json` |
-| `cards/` | `logo/{slug}_wordmark.png` + `{stem}.card_slots.json` + 6 PNGs (`01_cover.png` … `06_post_copy.png`) + Validator 1/2 reports |
-| `validation/` | P12 four-layer audit: `post_card_audit.json`, `QA_REPORT.md`, `reconciliation.csv`, `ocr_dump/`, `web_third_check.json`, `db_cross.json` |
-| `db_export/` | `rows_written.json`, `peer_context.json`, `prior_financials_used.json`, `db_index_summary.json` |
-| `logs/` | `tools.jsonl` per-tool telemetry |
-
-After the run, `db/equity_kb.sqlite` has new rows for this ticker + period that will be reused next quarter and made available as peer context for sibling companies.
-
-## How to run
-
-1. **Freeze the system prompt** — load `MEMORY.md` (project invariants) and `USER.md` (user preferences if present); record the resolved snapshot to `meta/system_prompt.frozen.txt`. Do not re-read these mid-run.
-2. **Bootstrap the run dir** — call `tools/io/run_dir.py` to create `output/{Company}_{Date}_{RunID}/` and seed `meta/run.jsonl` with `phase: P0_intent, event: phase_enter`.
-3. **Execute phases in order** per `workflow_meta.json`. For each phase:
-   - Append `phase_enter` to `meta/run.jsonl`.
-   - If the phase has a `tool`: invoke the Python script. If it has an `agent`: delegate to a fresh subagent context, scoped to the toolsets listed in the agent's frontmatter.
-   - For `parallelism: parallel` phases, dispatch all listed agents simultaneously; respect `subagent_concurrency_cap` from `workflow_meta.json`.
-   - On success: append `phase_exit` with the produced artifacts. On failure: append `phase_failed` with the error and follow the phase's `retry_to` / `retry_cap` policy.
-4. **Stop and ask the user** at each `blocking: true, interactive: true` gate. The three P0 gates — **P0_lang, P0_sec_email, P0_palette** — are at the same level: each must block on a real user reply or a sticky default in `USER.md`. Auto-mode does **not** waive them; do not invent a default to keep moving. Use the gate agent's prompt verbatim (in the user's language). Record the answer in `meta/gates.json` with `source: "user_response"` or `"USER.md sticky"` (plus the gate-specific extras whitelisted in each agent — never invent new source values).
-5. **Never skip P12** unless the user explicitly says so in the same turn. P12 is the paying-customer audit gate — its four layers (reconcile / OCR / web / DB) are described in `agents/post_card_auditor.md`.
-6. **After P12 passes**, run `P_DB_INDEX` (`tools/db/index_run.py`) to write into the database. If P12 failed, surface the report and ask the user which upstream phase to re-run; do not write to DB.
-
-## Subagent toolset whitelist
-
-When delegating, restrict the child to the minimum toolsets needed:
-
-| Subagent | Toolsets |
-|---|---|
-| `intent_resolver` | `web` |
-| `language_gate`, `sec_email_gate`, `palette_gate` | `io` (only) |
-| ER `financial_data_collector` | `research`, `web`, `io`, `db` (read) |
-| ER `macro_scanner` | `research`, `web`, `io`, `db` (read for short-circuit) |
-| ER `news_researcher` | `web`, `io`, `db` (read) |
-| ER QC peers | `research`, `io`, `db` (read) |
-| ER report writers | `research`, `io` |
-| ER `final_report_data_validator` | `research`, `io` |
-| EP `logo_production` | `web`, `io`, `photo` |
-| EP `content_production`, `hardcode_audit`, `layout_fill` | `photo`, `io` |
-| EP `validator_2` | `web`, `photo`, `io` |
-| `post_card_auditor` | `audit`, `db` (read), `web`, `io` |
-| `cross_validator` | `db` (read), `audit`, `io` |
-
-## Reading order for a fresh session
+## Boot order — read in this order, every session
 
 1. This file (`SKILL.md`)
-2. `MEMORY.md`
-3. `USER.md` (if present)
-4. `workflow_meta.json`
-5. `agents/orchestrator.md`
-6. The agent file for whatever phase you are about to enter
+2. `MEMORY.md` — project invariants (load-bearing; freeze into `meta/system_prompt.frozen.txt`)
+3. `USER.md` — per-user sticky preferences (skip if absent)
+4. `workflow_meta.json` — machine-readable phase + gate contract
+5. `agents/orchestrator.md` — runtime brief; drives the rest of the run
 
-Do not pre-load the ER/EP submodule agent files — load them lazily when you delegate to them, so token cost scales with the actual phase being executed.
+Stop after #5. **Do not pre-load** ER/EP submodule agents — open them lazily when you actually delegate, so token cost scales with the phase being executed.
 
-## Cross-quarter / cross-company
+## P0 gates — blocking, not skippable
 
-Before P1, the orchestrator runs `P0_DB_PRECHECK` (`tools/db/queries.py`):
+Four gates run before any research work. They split into two kinds:
 
-- If `get_prior_financials(ticker, n=4)` returns rows → ER `financial_data_collector` is told "we have FY2025-FY2026Q1; only fetch the new period."
-- If `get_macro_snapshot(geography, period)` returns a row collected in the last 14 days → `macro_scanner` short-circuits and reuses it.
-- If `get_peer_companies(...)` returns ≥2 peers → P3.7_X_VALIDATE will run peer Porter divergence checks and P12 layer 4 will run DB cross-validation.
+- **Resolution gate** — `P0_intent`. Resolves `{ticker, company, listing}` from the prompt. If the prompt is unambiguous, record `source: "prompt_unambiguous"` and proceed. Only ask the user (once) when ambiguous; then `source: "user_response"`.
+- **Interactive gates** — `P0_lang`, `P0_sec_email`, `P0_palette`. These cannot be inferred from the prompt. Each must be satisfied by either a real user reply (`source: "user_response"`) or a sticky value in `USER.md` (`source: "USER.md sticky"`). **Auto-mode does not waive them.** Inventing a default for an interactive gate is a P0 violation and will be caught in `meta/gates.json` review.
 
-Cold start (no prior runs of anything) is handled gracefully: every read function returns empty list / None and the orchestrator skips the dependent checks with a note `status: "no_priors"` in the affected report.
+The four phases:
 
-## Maintenance
+1. `P0_intent` — resolve `{ticker, company, listing}`. Resolution gate; ask once only if ambiguous.
+2. `P0_lang` — `report_language ∈ {en, zh}`. Do not infer from chat language alone.
+3. `P0_sec_email` — only when `listing == US` AND mode A AND no `USER.md` sticky.
+4. `P0_palette` — `palette ∈ {macaron, default, b, c}`. All six cards in one run share one palette.
 
-- When the locked HTML template inside `skills_repo/er/agents/report_writer_*.md` changes, the SHA256 in ER's `tests/test_extract_report_template.py` must be updated by the ER maintainer; this skill picks it up at the next `git submodule update`.
-- When the EP card slot schema changes (`skills_repo/ep/references/card-slots.schema.json`), `tools/audit/reconcile_numbers.py` may need updated path mappings.
-- When adding a new column to a DB table, write `db/schema/00X_*.sql` and bump `PRAGMA user_version`. Never destroy.
+For per-gate rules, the full whitelist of allowed `source` values, and rejection criteria, read **`references/p0_gates.md`**.
 
-For the per-phase brief, open `agents/orchestrator.md`.
+## Hard floor
+
+- **Never skip P12** unless the user explicitly says so in the same turn. P12 is the paying-customer audit gate.
+- **Never write to DB** if P12 failed. `P_DB_INDEX` runs only after `P12_final_audit` passes.
+- **Never bypass a P0 gate** by inventing a value. Cost of guessing wrong = full re-run.
+- **Never edit the locked HTML template** during P5. Substitute `{{PLACEHOLDER}}` only — the SHA256 pin in ER's tests will catch you.
+- **Never accept a simplified HTML report.** After P5, run `tools/research/validate_report_html.py`; line-count/section/JS/template-marker failure means the report writer did not use the locked template and P5 must be rerun before P6/P7.
+- **Never persist user emails to the DB.** SEC EDGAR email is a runtime arg only; PII guard in `tests/test_db_pii.py` is non-negotiable.
+
+## Commands you will run
+
+| When | Command |
+|---|---|
+| First-time setup | `python equiforge.py init` (builds `db/equity_kb.sqlite` from `db/schema/`) |
+| Pre-flight | `pytest -q` (must be green) and `python tools/research/validate_workflow_meta.py` (validates equiforge's root contract; pass `--target er` to also check the ER submodule contract) |
+| Bootstrap a run dir | `python tools/io/run_dir.py --company <slug> --date <YYYY-MM-DD> --run-id <hex>` |
+| P5 HTML gate | `python tools/research/validate_report_html.py --run-dir <path> --lang <cn\|en>` (must pass before P6/P7) |
+| Index a finished run | `python tools/db/index_run.py --run-dir <path>` (only after P12 passes) |
+
+The full per-phase tool/agent inventory lives in `workflow_meta.json`.
+
+## Where to read for full detail
+
+Pull these in lazily — only when you need them.
+
+| Topic | Reference |
+|---|---|
+| Phase-by-phase narrative (P0 … P_DB_INDEX) | `references/phase_contract.md` |
+| Per-gate rules (whitelisted `source` values, rejections) | `references/p0_gates.md` |
+| Subagent toolset whitelist + concurrency caps + timeouts | `references/subagent_toolsets.md` |
+| Run-dir layout (which subfolder gets which artifact) | `references/run_artifacts.md` |
+| Cross-quarter / cross-company DB reuse | `references/cross_quarter.md` |
+| Maintenance (template SHA, palette, schema, submodules) | `references/maintenance.md` |
+| Harness/CLI/tests/DB/audit/resume architecture | `HARNESS.md` |
+
+For the runtime procedure, open **`agents/orchestrator.md`** next.

@@ -12,13 +12,26 @@ A portable AI skill pack that fuses two existing skills — **Equity Research** 
 
 ## Repository layout
 
+equiforge is a **harness-backed skill**: delivered as a skill (`SKILL.md` is the auto-trigger entry), maintained as a production harness (`HARNESS.md` is the architecture doc). The split is deliberate — see `HARNESS.md` for why.
+
 ```
 equiforge/
-├── SKILL.md                 # ★ single orchestration entry — start here
-├── MEMORY.md                # project invariants (gate IDs, tolerances, hard rules)
+├── SKILL.md                 # ★ thin skill entry — boot order, P0 gates, pointers
+├── HARNESS.md               # harness/architecture/CLI/tests — start here for maintenance
+├── MEMORY.md                # project invariants (frozen at session start)
 ├── USER.md                  # per-user preferences (gitignored; copy from .template)
 ├── workflow_meta.json       # machine-readable phase/gate contract
-├── agents/                  # subagent briefs (markdown)
+├── equiforge.py             # CLI entry (init, status)
+│
+├── agents/                  # equiforge-owned briefs only (orchestrator, gates, auditors)
+│                            # upstream ER/EP agents stay under skills_repo/ — see HARNESS.md
+├── references/              # lazy-loaded skill docs
+│   ├── phase_contract.md
+│   ├── p0_gates.md
+│   ├── subagent_toolsets.md
+│   ├── run_artifacts.md
+│   ├── cross_quarter.md
+│   └── maintenance.md
 ├── skills/                  # procedural how-tos (markdown)
 ├── tools/                   # Python CLIs (research/, photo/, audit/, db/, web/, io/)
 ├── skills_repo/             # git submodules
@@ -27,15 +40,9 @@ equiforge/
 ├── db/
 │   ├── equity_kb.sqlite     # gitignored; built from db/schema/*.sql
 │   ├── schema/              # numbered SQL migrations
-│   └── sector_reports/      # cross-company analytical reports
+│   └── sector_reports/      # gitignored; cross-company reports rebuilt on demand
 ├── tests/                   # pytest suite
-└── output/                  # gitignored; one folder per run
-    └── {Company}_{Date}_{RunID}/
-        ├── meta/            # run.jsonl, frozen system prompt, gates, submodule SHAs
-        ├── research/        # ER artifacts (JSON + HTML)
-        ├── cards/           # EP artifacts (card_slots.json + 6 PNGs + logo)
-        ├── validation/      # P12 four-layer audit
-        └── db_export/       # snapshot of rows written this run
+└── output/                  # gitignored; one folder per run (see references/run_artifacts.md)
 ```
 
 ## Quick start
@@ -82,7 +89,7 @@ P0_intent → P0_lang → P0_sec_email → P0_palette → P0M_meta → P0_DB_PRE
   → P_DB_INDEX writes everything into db/equity_kb.sqlite
 ```
 
-See `workflow_meta.json` for the machine-readable contract and `agents/orchestrator.md` for the runtime brief.
+See `workflow_meta.json` for the machine-readable contract, `agents/orchestrator.md` for the runtime brief, `references/phase_contract.md` for the prose phase narrative, and `HARNESS.md` for the harness architecture.
 
 ## Cross-quarter and cross-company reuse
 

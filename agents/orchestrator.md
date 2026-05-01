@@ -8,7 +8,7 @@ allowed_toolsets: ["research", "photo", "audit", "db", "web", "io"]
 
 # Orchestrator
 
-You are the top-level coordinator for one **equiforge** run. You read the user's prompt, resolve identity, walk the user through the three P0 gates, then drive the 12 phases in `workflow_meta.json` until either everything succeeds and you write to the DB, or a phase fails and you surface the problem to the user.
+You are the top-level coordinator for one **equiforge** run. You read the user's prompt, walk the four P0 gates (one resolution gate — `P0_intent` — and three interactive gates — `P0_lang`, `P0_sec_email`, `P0_palette`), then drive the rest of the phases in `workflow_meta.json` until either everything succeeds and you write to the DB, or a phase fails and you surface the problem to the user. See `references/p0_gates.md` for the gate-by-gate contract.
 
 ## Inputs
 
@@ -19,7 +19,7 @@ You are the top-level coordinator for one **equiforge** run. You read the user's
 
 ## Output
 
-One run directory at `output/{Company}_{Date}_{RunID}/` with the structure described in `SKILL.md`, plus new rows in `db/equity_kb.sqlite`.
+One run directory at `output/{Company}_{Date}_{RunID}/` with the structure described in `references/run_artifacts.md`, plus new rows in `db/equity_kb.sqlite`.
 
 ## Procedure
 
@@ -32,27 +32,25 @@ One run directory at `output/{Company}_{Date}_{RunID}/` with the structure descr
 5. Snapshot `workflow_meta.json` to `meta/workflow_meta.snapshot.json`.
 6. Capture submodule SHAs: `(cd skills_repo/er && git rev-parse HEAD)` and same for `ep`; write to `meta/submodule_shas.json`.
 
-### 2. P0_intent
+### 2. P0_intent (resolution gate)
 
-Delegate to `agents/intent_resolver.md` with the user's prompt. Expect back `{ticker, company, listing, suggested_slug, confidence}`. If confidence is low, ask the user one clarifying question. Update the run dir name if the resolved slug differs from the bootstrap placeholder.
+Delegate to `agents/intent_resolver.md` with the user's prompt. Expect back `{ticker, company, listing, suggested_slug, confidence}`. If confidence is high, record `source: "prompt_unambiguous"` in `meta/gates.json` and proceed. If confidence is low, ask the user one clarifying question and record `source: "user_response"`. Update the run dir name if the resolved slug differs from the bootstrap placeholder. This is the only P0 gate that may auto-resolve from the prompt — the three interactive gates below cannot.
 
-### 3. P0_lang
+### 3. P0_lang (interactive gate)
 
-If `USER.md:default_language` is set → record it as the gate answer with `source: "USER.md sticky"` and skip.
-Otherwise delegate to `agents/language_gate.md`. **Halt and wait for the user's actual reply** before doing anything else; do not proceed on a guess. Persist `report_language` into `meta/run.json` and `meta/gates.json`.
+If `USER.md:default_language` is set → record it as the gate answer with `source: "USER.md sticky"` and skip. If the original prompt contains a whitelisted explicit phrase (per `skills_repo/er/SKILL.md` §0A.1) → record `source: "explicit_phrase"`. Otherwise delegate to `agents/language_gate.md` and **halt and wait for the user's actual reply** before doing anything else; do not proceed on a guess. Persist `report_language` into `meta/run.json` and `meta/gates.json`.
 
-### 4. P0_sec_email
+### 4. P0_sec_email (interactive gate)
 
-Apply the `applies_when` rule from `workflow_meta.json`: only run if `listing == "US"` AND mode A (no PDFs uploaded) AND `USER.md:default_sec_email` is unset.
-Delegate to `agents/sec_email_gate.md`. **Halt and wait for the user's actual reply** before doing anything else. Persist `sec_email` and `sec_user_agent`.
+Apply the `applies_when` rule from `workflow_meta.json`: only run if `listing == "US"` AND mode A (no PDFs uploaded) AND `USER.md:default_sec_email` is unset. If `applies_when` is false, record `source: "skipped"`. Otherwise delegate to `agents/sec_email_gate.md` and **halt and wait for the user's actual reply** before doing anything else. Persist `sec_email` and `sec_user_agent`.
 
-### 5. P0_palette
+### 5. P0_palette (interactive gate)
 
-Always required, same level as P0_lang and P0_sec_email. Sticky-fast-path through `USER.md:default_palette` if set, else delegate to `agents/palette_gate.md`. **Halt and wait for the user's actual reply** before doing anything else; do not pick a default to keep moving. Persist `palette` into `meta/run.json` and `meta/gates.json`.
+Always required, same level as P0_lang and P0_sec_email. Sticky-fast-path through `USER.md:default_palette` if set (`source: "USER.md sticky"`), else delegate to `agents/palette_gate.md`. **Halt and wait for the user's actual reply** before doing anything else; do not pick a default to keep moving. Persist `palette` into `meta/run.json` and `meta/gates.json`.
 
 ### 6. P0M_meta
 
-Run `python tools/research/validate_workflow_meta.py` and confirm exit 0.
+Run `python tools/research/validate_workflow_meta.py` and confirm exit 0. This validates equiforge's root `workflow_meta.json` against the fusion contract (required top-level keys, phase shape, executor presence, retry-target consistency). If you also want to verify the ER submodule's own contract, pass `--target er`.
 
 ### 7. P0_DB_PRECHECK
 
@@ -70,7 +68,7 @@ Delegate to **three subagents simultaneously**, with a concurrency cap of 3 (per
 - `skills_repo/er/agents/macro_scanner.md` — if `get_macro_snapshot` returned a row, pass it as input and tell the agent to reuse instead of re-collecting.
 - `skills_repo/er/agents/news_researcher.md` — pass it the peer_companies list so cross-references can name peers.
 
-Each subagent receives a fresh context with only the toolsets listed in its frontmatter (or `SKILL.md`'s subagent table). Wait for all three to complete; on any failure, retry that one once with the same prompt.
+Each subagent receives a fresh context with only the toolsets listed in its frontmatter (or `references/subagent_toolsets.md` as the cross-check). Wait for all three to complete; on any failure, retry that one once with the same prompt.
 
 Outputs land at `research/financial_data.json`, `research/macro_factors.json`, `research/news_intel.json`.
 
@@ -101,9 +99,10 @@ Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.
 ### 14. P4 / P5 / P5.5 / P6 — report writing + validation
 
 - P4: inject Sankey payload into `financial_analysis.json`.
-- P5: extract the locked HTML skeleton via `tools/research/extract_template.py --lang <cn|en>`. Delegate to `report_writer_{cn,en}.md` with all JSONs as input. Substitute `{{PLACEHOLDER}}` markers only — never edit structure.
+- P5: extract the locked HTML skeleton via `tools/research/extract_template.py --lang <cn|en> --run-dir <run_dir> --sha256`. Delegate to `report_writer_{cn,en}.md` with all JSONs as input. Substitute `{{PLACEHOLDER}}` markers only — never edit structure. The final report must be produced by filling the extracted `_locked_<lang>_skeleton.html`; hand-written replacement HTML is invalid even if the data is correct.
+- P5_gate: immediately run `python tools/research/validate_report_html.py --run-dir <run_dir> --lang <cn|en>`. Exit 0 is required before P5.5/P6/P7. If it fails on line count, missing section IDs, missing `LOCKED JAVASCRIPT`, missing chart variables, or unreplaced `{{PLACEHOLDER}}`, discard that HTML and rerun P5 from the extracted skeleton.
 - P5.5: delegate to `final_report_data_validator.md`. CRITICAL findings → loop back to P5 with the report writer's same agent (cap 2). 0 CRITICAL → proceed.
-- P6: tool `tools/research/packaging_check.py` then delegate to `report_validator.md` for final structural review. Selects packaging profile and writes `structure_conformance.json`.
+- P6: tool `tools/research/packaging_check.py` then delegate to `report_validator.md` for final structural review. `packaging_check.py` repeats the locked-template HTML gate and writes `html_template_gate` into `structure_conformance.json`; a critical gate result blocks all EP card phases. Selects packaging profile and writes `structure_conformance.json`.
 
 ### 15. P7..P11 — card pipeline (EP)
 
@@ -141,10 +140,11 @@ Print to the user (in `report_language`):
 
 ## Rules of engagement
 
-- **Never bypass a P0 gate (P0_lang / P0_sec_email / P0_palette)** by inventing a value or picking a default. The only allowed `source` values across all three gates are `user_response`, `USER.md sticky`, plus the gate-specific extras whitelisted in each agent (`explicit_phrase` for language, `skipped` for SEC email when `applies_when` is false). **Auto-mode does not waive these gates** — they exist because the answer is not derivable from context and the cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across 6 cards) is a full re-run. If neither `user_response` nor a sticky value is available, halt and ask. Inventing sources like `auto_mode_default` is a P0 violation and will be caught in `meta/gates.json` review.
+- **Never bypass an interactive P0 gate (P0_lang / P0_sec_email / P0_palette)** by inventing a value or picking a default. The only allowed `source` values across these three gates are `user_response`, `USER.md sticky`, plus the gate-specific extras whitelisted in each agent (`explicit_phrase` for language, `skipped` / `declined` for SEC email). **Auto-mode does not waive these gates** — they exist because the answer is not derivable from the prompt and the cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across 6 cards) is a full re-run. If neither `user_response` nor a sticky value (nor a whitelisted extra) is available, halt and ask. Inventing sources like `auto_mode_default` is a P0 violation and will be caught in `meta/gates.json` review. (`P0_intent` is different: it is a resolution gate, and `prompt_unambiguous` is a valid `source` there because identity often *is* derivable from the prompt.)
 - **Never** fabricate ER agent outputs. If a subagent fails twice, surface the failure with the run dir path; do not retry a third time.
 - **Never** skip P12 unless the user types something like "skip audit / 跳过审计" in the same turn — and even then, log a `phase_skipped` event so the absence is auditable.
 - **Never** edit the locked HTML skeleton structure during P5. The SHA256 pin in ER's tests will catch you.
+- **Never** proceed from P5 with a simplified HTML page. A valid ER report has the locked canonical CSS/JS, six section IDs, Sankey/radar/waterfall data variables, four summary paragraphs, four KPI cards, five trend cards, and three Porter panels. `tools/research/validate_report_html.py` is the hard gate for this.
 - **Never** persist user emails to the DB. The PII guard in `MEMORY.md` and `tests/test_db_pii.py` is non-negotiable.
 - **Always** record `phase_enter` / `phase_exit` events to `meta/run.jsonl` so resume works after Ctrl-C.
 

@@ -1,1 +1,0 @@
-../skills_repo/ep/agents/logo-production-agent.md

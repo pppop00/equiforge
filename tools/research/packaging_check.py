@@ -3,6 +3,8 @@
 Verifies that all required research/ artifacts exist in the run dir and selects the
 ER packaging profile from skills_repo/er/workflow_meta.json based on which artifacts
 are present (sec_edgar_bundle.json → secapi=yes; qc_audit_trail.json → qc=full).
+Also runs the locked-template HTML gate to prevent simplified hand-written report
+pages from advancing into the card pipeline.
 
 This is a static, deterministic check; the actual ER report_validator agent does
 the structural HTML audit afterwards.
@@ -19,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import find_skill_root  # noqa: E402
+from validate_report_html import validate_html_report  # noqa: E402
 
 PROFILES = {
     ("full", "yes"): "strict_18_full_qc_secapi",
@@ -54,10 +57,24 @@ def determine_profile(research_dir: Path) -> dict:
     if sec_api:
         required.add("sec_edgar_bundle.json")
 
-    html = list(research_dir.glob("*_Research_*.html"))
+    html = sorted(p for p in research_dir.glob("*_Research_*.html") if not p.name.startswith("_locked_"))
     missing = sorted(f for f in required if not (research_dir / f).exists())
     if not html:
         missing.append("<Company>_Research_{CN|EN}.html")
+
+    html_gate = None
+    if len(html) == 1:
+        lang = "cn" if html[0].name.endswith("_CN.html") else "en"
+        skeleton_candidates = [
+            research_dir / f"_locked_{lang}_skeleton.html",
+            research_dir / "_locked_skeleton.html",
+        ]
+        skeleton = next((p for p in skeleton_candidates if p.exists()), None)
+        html_gate = validate_html_report(html[0], skeleton)
+        if html_gate["status"] == "critical":
+            missing.append("locked_template_html_gate")
+    elif len(html) > 1:
+        missing.append("exactly_one_report_html")
 
     return {
         "profile": profile,
@@ -66,6 +83,7 @@ def determine_profile(research_dir: Path) -> dict:
         "required_count": len(required) + 1,
         "missing": missing,
         "html_files": [p.name for p in html],
+        "html_template_gate": html_gate,
         "status": "pass" if not missing else "critical",
     }
 
