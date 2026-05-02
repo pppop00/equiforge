@@ -75,9 +75,10 @@ P0_intent → P0_lang → P0_sec_email → P0_palette → P0M_meta → P0_DB_PRE
   → P3.6 QC resolution merge
   → P3.7 cross-validation (history / peer / macro drift)
   → P4 Sankey payload
-  → P5 HTML report writer (locked SHA256-pinned template)
+  → P5 HTML report writer (locked SHA256-pinned template — no simplified bypass)
+  → P5_gate tools/research/validate_report_html.py (line/section/JS/marker hard gate)
   → P5.5 final data validator (CFA-level)
-  → P6 report validator + packaging profile
+  → P6 report validator + packaging profile (one of four whitelisted)
   → P7 logo production (≥840px wide; saved to output dir first)
   → P8 card content production
   → P8.5 hardcode/logic audit
@@ -99,6 +100,16 @@ After a few runs, the database lets you:
 - **Cross-validate against history** — running Apple in Q3 will compare the new financials against Apple's Q1/Q2 rows already in DB; YoY > 5pp delta from reported flags as CRITICAL.
 - **Cross-validate against peers** — Apple's Porter `rivalry=3` while Samsung (DB) is `5`: P12 flags as a peer-divergence warning for analyst review.
 - **Generate sector reports** — `python tools/db/sector_report.py --type porter_heatmap --sector "Information Technology" --period 2026Q2` produces a force × peer matrix HTML+JSON.
+
+## Locked report template
+
+Every run delivers two artifacts: **one HTML report and six PNG cards.** The HTML report is always produced by filling the SHA256-pinned locked skeleton extracted via `tools/research/extract_template.py` — there is **no institution-compatible / private-company / scope-limited / simplified bypass**.
+
+- Public issuers, private funds, hedge funds, family offices, government entities — same locked template, every time.
+- When issuer-level financials are unavailable, the report writer fills the locked sections with the best available proxies (AUM, strategy, top holdings, manager-level filings, peer macro) and labels residual gaps inline. It does not drop sections, shorten the template, or hand-write a summary page.
+- After P5, `tools/research/validate_report_html.py` is a hard gate (line count ≥ 500, six section IDs, locked CSS/JS markers, chart data variables, no `{{PLACEHOLDER}}` remaining). Non-zero exit ⇒ discard the HTML and rerun P5 from the extracted skeleton.
+- `report_validation.txt`'s top-line status is one of `pass | warn | critical` — fabricated values like `pass_with_scope_limitations` or `not_applicable` are P6 violations.
+- `structure_conformance.json -> profile` must be one of the four whitelisted in `workflow_meta.json -> packaging_profiles`. The picker is `(qc_mode, sec_api_mode)`; new profile names are not allowed.
 
 ## Privacy
 

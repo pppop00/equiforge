@@ -41,8 +41,11 @@ def load_research(run_dir: Path) -> dict:
     return out
 
 
-def check_self_history(ticker: str, fiscal_period: str, fa: dict, fd: dict) -> dict:
-    priors = queries.get_prior_financials(ticker, n=4)
+def check_self_history(ticker: str, fiscal_period: str, fa: dict, fd: dict, run_id: str | None = None) -> dict:
+    priors = [
+        p for p in queries.get_prior_financials(ticker, n=4)
+        if not run_id or p.get("source_run_id") != run_id
+    ]
     if not priors:
         return {"id": "self_history_yoy", "severity": "info", "result": "no_priors"}
 
@@ -172,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     geography = research["macro_factors"].get("primary_operating_geography") or meta.get("primary_geography")
 
     checks = [
-        check_self_history(ticker, fiscal_period, research["financial_analysis"], research["financial_data"]),
+        check_self_history(ticker, fiscal_period, research["financial_analysis"], research["financial_data"], meta.get("run_id")),
         check_peer_porter(ticker, sector, research["porter_analysis"]),
         check_macro_drift(geography, fiscal_period, research["macro_factors"]),
     ]
