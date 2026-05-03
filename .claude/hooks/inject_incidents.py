@@ -53,9 +53,9 @@ def build_context() -> str:
     skill = REPO_ROOT / "SKILL.md"
 
     lines = [
-        "[equiforge harness reminder — injected by .claude/hooks/inject_incidents.py]",
+        "[Anamnesis Research harness reminder — injected by .claude/hooks/inject_incidents.py]",
         "",
-        "This prompt looks like an equity-research request. Before any phase work:",
+        "This prompt looks like an equity-research request. This project is Anamnesis Research (codename: equiforge), an implementation of the Anamnesis Pattern. Before any phase work:",
         f"1. Read {skill.relative_to(REPO_ROOT)} for the boot order and P0 gates.",
         f"2. Read {memory.relative_to(REPO_ROOT)} for project invariants (frozen at session start).",
         f"3. Read {incidents.relative_to(REPO_ROOT)} end-to-end. Acknowledge each incident in meta/run.jsonl as `incident_precheck.acknowledged` during P_INCIDENT_PRECHECK.",

@@ -1,7 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "name": "equiforge",
-  "description": "End-to-end equity research + social card pipeline with persistent knowledge base and four-layer audit. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
+  "name": "anamnesis-research",
+  "codename": "equiforge",
+  "description": "End-to-end equity research + social card pipeline built on the Anamnesis Pattern (cross-session institutional memory + scheduled adversarial review). Persistent knowledge base, four-layer audit, two attacker agents, incident pre/post-check bracket. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
   "phases": [
     {
       "id": "P_INCIDENT_PRECHECK",

@@ -3,7 +3,7 @@ schema_version: 1
 description: Project-level invariants frozen into the system prompt at session start. Do not violate without an explicit user instruction in the same turn.
 ---
 
-# equiforge — Project Memory
+# Anamnesis Research — Project Memory
 
 These rules are **load-bearing** and apply to every run. They are read once at session start and frozen into `meta/system_prompt.frozen.txt`. `INCIDENTS.md` is loaded alongside this file at the same moment and into the same frozen prompt — it carries the project's institutional memory of past failure modes (one entry per incident, with the load-bearing rule that prevents recurrence). Read both. The contracts compose: anything in `INCIDENTS.md` overrides nothing here, and nothing here waives anything in `INCIDENTS.md`.
 
@@ -48,7 +48,7 @@ Intense rivalry → high red; minimal competition → low green. Reverse this an
 
 ## Database write rules
 
-- `P_DB_INDEX` runs after `P12_final_audit` passes. Failed audits do not write to DB.
+- `P_DB_INDEX` runs only after `P12_final_audit` passes and `P_INCIDENT_POSTCHECK` reports `flagged: []`. Failed audits or flagged incident post-checks do not write to DB.
 - All writes for one run are inside a single transaction; failure → rollback + `runs.run_status='failed'` + `db_export/index_error.json`.
 - Append-only tables (`intelligence_signals`, `disclosure_quirks`) survive partial-run admission with an analyst note.
 - Cross-validation queries (`db/queries.py`) filter on `runs.run_status='complete'` by default; partial rows exist for audit only.

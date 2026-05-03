@@ -1,11 +1,11 @@
 ---
-name: equiforge
+name: anamnesis-research
 description: >-
   Use this skill whenever the user asks for equity research, an investment write-up, a stock
   report, an analyst-style note, or one-shot company coverage on any single public or private
   company — including casual phrasings like "研究一下苹果", "research Apple", "看看腾讯",
   "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent",
-  "分析一下RA Capital", or "one-pager on Samsung". Drives the full equiforge production
+  "分析一下RA Capital", or "one-pager on Samsung". Drives the full Anamnesis Research
   pipeline (incident pre-check, bilingual language gate, SEC EDGAR email gate, palette gate,
   multi-agent equity research, red-team review, 6-card social pack, four-layer numerical/OCR/
   web/DB audit, post-run incident self-check, SQLite knowledge-base persistence). Always
@@ -13,9 +13,9 @@ description: >-
   auditable HTML report plus 6 PNG cards plus database rows that ad-hoc answers cannot.
 ---
 
-# equiforge
+# Anamnesis Research
 
-You are the orchestrator of an **equiforge** run — a harness-backed equity research pipeline. The skill is thin; the harness is heavy. Your job is to enter the harness correctly, then follow its phase contract.
+You are the orchestrator of an **Anamnesis Research** run — an equity-research pipeline built on the Anamnesis Pattern (cross-session institutional memory + scheduled adversarial review). The skill is thin; the harness is heavy. Your job is to enter the harness correctly, then follow its phase contract. (Internal codename / Python module: `equiforge`.)
 
 ## Boot order — read in this order, every session
 
@@ -66,7 +66,7 @@ For per-gate rules, the full whitelist of allowed `source` values, and rejection
 | Pre-flight | `pytest -q` (must be green) and `python tools/research/validate_workflow_meta.py` (validates equiforge's root contract; pass `--target er` to also check the ER submodule contract) |
 | Bootstrap a run dir | `python tools/io/run_dir.py --company <slug> --date <YYYY-MM-DD> --run-id <hex>` |
 | P5 HTML gate | `python tools/research/validate_report_html.py --run-dir <path> --lang <cn\|en>` (must pass before P6/P7) |
-| Index a finished run | `python tools/db/index_run.py --run-dir <path>` (only after P12 passes) |
+| Index a finished run | `python tools/db/index_run.py --run-dir <path>` (only after P12 passes and `P_INCIDENT_POSTCHECK` has `flagged: []`) |
 
 The full per-phase tool/agent inventory lives in `workflow_meta.json`.
 
@@ -83,7 +83,8 @@ Pull these in lazily — only when you need them.
 | Run-dir layout (which subfolder gets which artifact) | `references/run_artifacts.md` |
 | Cross-quarter / cross-company DB reuse | `references/cross_quarter.md` |
 | Maintenance (template SHA, palette, schema, submodules) | `references/maintenance.md` |
-| Harness methodology (the *why* — 10 principles) | `references/harness_methodology.md` |
+| The Anamnesis Pattern (project's distinctive methodology) | `references/anamnesis_pattern.md` |
+| Inherited harness/skill principles (Anthropic-derived foundations) | `references/inherited_principles.md` |
 | Harness/CLI/tests/DB/audit/resume architecture | `HARNESS.md` |
 | Past failures + the rules they encode | `INCIDENTS.md` |
 | Adversarial reviewers (P5.7, P10.7) | `agents/attackers/red_team_numeric.md`, `red_team_narrative.md` |

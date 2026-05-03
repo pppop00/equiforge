@@ -1,12 +1,14 @@
-# equiforge — harness architecture
+# Anamnesis Research — harness architecture
 
-equiforge is delivered as a skill (entry: `SKILL.md`) and maintained as a production harness (this file). The skill side tells the model *what to do*; the harness side defines *how the run is executed, persisted, audited, and resumed*. If you are running the pipeline, read `SKILL.md`. If you are extending the harness — adding a tool, changing the DB schema, wiring a new audit layer — start here.
+**Anamnesis Research** is delivered as a skill (entry: `SKILL.md`, slug: `anamnesis-research`) and maintained as a production harness (this file). The Python module / internal codename is `equiforge` — that name persists in file paths (`equiforge.py`, `tools/`, output paths) for compatibility, but the public name of the project is **Anamnesis Research**.
+
+The skill side tells the model *what to do*; the harness side defines *how the run is executed, persisted, audited, and resumed*. If you are running the pipeline, read `SKILL.md`. If you are extending the harness — adding a tool, changing the DB schema, wiring a new audit layer — start here.
 
 ## Two contracts, one repo
 
 | Surface | Audience | Source of truth |
 |---|---|---|
-| Skill (auto-triggered) | LLM / Codex / Claude | `SKILL.md` (root, canonical) + `.claude/skills/equiforge/SKILL.md` (project mount for auto-discovery) |
+| Skill (auto-triggered) | LLM / Codex / Claude | `SKILL.md` (root, canonical) + `.claude/skills/anamnesis-research/SKILL.md` (project mount for auto-discovery) |
 | Workflow contract | Both | `workflow_meta.json` (machine-readable phases) |
 | Project invariants | LLM | `MEMORY.md` (frozen at session start) |
 | Institutional failure log | LLM | `INCIDENTS.md` (frozen at session start, append-only) |
@@ -14,7 +16,8 @@ equiforge is delivered as a skill (entry: `SKILL.md`) and maintained as a produc
 | Runtime brief | Orchestrator subagent | `agents/orchestrator.md` |
 | Adversarial reviewers | Orchestrator subagent | `agents/attackers/red_team_{numeric,narrative}.md` |
 | Reference docs | Lazy-loaded by the model | `references/*.md` |
-| Methodology (the *why*) | Maintainer | `references/harness_methodology.md` |
+| The Anamnesis Pattern (the methodology, generalised) | Maintainer + adopters of the pattern | `references/anamnesis_pattern.md` |
+| Inherited principles (Anthropic harness/skill foundations) | Maintainer | `references/inherited_principles.md` |
 | Pre-prompt safety net | Claude Code runtime | `.claude/settings.json` + `.claude/hooks/inject_incidents.py` |
 | Slash commands (user-triggered) | Claude Code runtime | `.claude/commands/*.md` |
 | Maintainer architecture | Humans (you, future you) | `HARNESS.md` (this file) |
@@ -34,7 +37,7 @@ equiforge/
 ├── equiforge.py            # CLI entry (init, status, etc.)
 │
 ├── .claude/                # Claude Code project-scoped configuration
-│   ├── skills/equiforge/SKILL.md   # project skill mount (auto-discovery)
+│   ├── skills/anamnesis-research/SKILL.md   # project skill mount (auto-discovery)
 │   ├── settings.json               # hooks block (UserPromptSubmit reminder)
 │   ├── hooks/inject_incidents.py   # injects INCIDENTS reminder on research-style prompts
 │   └── commands/log-incident.md    # /log-incident slash command spec
@@ -58,7 +61,8 @@ equiforge/
 │   ├── run_artifacts.md
 │   ├── cross_quarter.md
 │   ├── maintenance.md
-│   └── harness_methodology.md      # the *why* behind the layout
+│   ├── anamnesis_pattern.md        # ★ the methodology, generalised
+│   └── inherited_principles.md     # principles inherited from Anthropic harness/skill design
 │
 ├── tools/                  # Python CLIs (one tool per concern)
 │   ├── research/   ├── photo/   ├── audit/
@@ -185,7 +189,7 @@ New incidents are captured by the user via `/log-incident <one-line description>
 3. Model drafts a candidate `I-NNN` entry matching existing format.
 4. User confirms before append. Append-only — no rewrites.
 
-See `references/harness_methodology.md` §Principle 3 for the rationale.
+See `references/anamnesis_pattern.md` for the full pattern definition (the CFRV cycle, outer/inner loops, adversarial axis, applicability beyond equity research, and anti-patterns).
 
 ## Red-team attackers
 
@@ -204,7 +208,7 @@ Critical findings from either attacker loop the writer once with a combined revi
 
 Project-scoped under `.claude/`. Three independent surfaces:
 
-- **`.claude/skills/equiforge/SKILL.md`** — auto-discovered skill mount. Lets Claude Code find the skill from any folder under this project. Canonical content is at the repo root `SKILL.md`; this file is a thin pointer with the same frontmatter so description-based auto-trigger works. Edit both when you change the description.
+- **`.claude/skills/anamnesis-research/SKILL.md`** — auto-discovered skill mount. Lets Claude Code find the skill from any folder under this project. Canonical content is at the repo root `SKILL.md`; this file is a thin pointer with the same frontmatter so description-based auto-trigger works. Edit both when you change the description.
 - **`.claude/settings.json` + `.claude/hooks/inject_incidents.py`** — UserPromptSubmit hook. On every prompt, the hook checks for research-style trigger phrases (EN/ZH); if matched, it injects an `INCIDENTS.md` reminder into the model's context as a safety net. No-op for non-research prompts.
 - **`.claude/commands/log-incident.md`** — slash command. User types `/log-incident <description>` to draft a new INCIDENTS entry from the latest run.
 
@@ -221,7 +225,7 @@ The hook is a safety net, not a substitute. The orchestrator must still read `IN
 
 | You are changing… | Update |
 |---|---|
-| What the skill triggers on | `SKILL.md` description **and** `.claude/skills/equiforge/SKILL.md` description (keep in sync) |
+| What the skill triggers on | `SKILL.md` description **and** `.claude/skills/anamnesis-research/SKILL.md` description (keep in sync) |
 | Boot order / commands the model must run | `SKILL.md` body |
 | What a phase produces / its tool | `workflow_meta.json` + `references/phase_contract.md` |
 | Per-gate rules (whitelist, sticky source) | `references/p0_gates.md` |
@@ -235,4 +239,5 @@ The hook is a safety net, not a substitute. The orchestrator must still read `IN
 | DB schema | new `db/schema/00X_*.sql` + bump `PRAGMA user_version` + run migration tests |
 | Locked HTML template | upstream `skills_repo/er` only — equiforge bumps the submodule |
 | Architecture / CLI / dev workflow | this file (`HARNESS.md`) |
-| Methodology / the *why* behind the layout | `references/harness_methodology.md` |
+| The Anamnesis Pattern (methodology, generalised) | `references/anamnesis_pattern.md` |
+| Inherited principles (Anthropic harness/skill foundations) | `references/inherited_principles.md` |
