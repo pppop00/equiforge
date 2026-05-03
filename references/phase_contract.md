@@ -104,7 +104,7 @@ Delegated to subagents under `skills_repo/er/agents/`. The orchestrator's job is
 
 ## P12 — paying-customer audit ★
 
-Four layers in order, via `agents/post_card_auditor.md`:
+Layers in order, via `agents/post_card_auditor.md`:
 
 | Layer | Tool | Fail blocks? |
 |---|---|---|
@@ -112,8 +112,9 @@ Four layers in order, via `agents/post_card_auditor.md`:
 | 2. OCR over the 6 PNGs | `tools/audit/ocr_cards.py` | yes |
 | 3. Web third-check (top-3 numbers) | `tools/audit/web_third_check.py` | yes |
 | 4. DB cross-validate | `tools/audit/db_cross_validate.py` | no (cold-start OK) |
+| 5. User-Agent PII guard | `tools/audit/user_agent_pii.py` | yes |
 
-Output: `validation/post_card_audit.json` + human-readable `validation/QA_REPORT.md` (the QA report aggregates P12 findings *and* the `warn`-level findings from P5.7 / P10.7). Never skip P12 unless the user types "skip audit / 跳过审计" in the same turn — and even then, log a `phase_skipped` event.
+Output: `validation/post_card_audit.json`, `validation/user_agent_pii.json`, and human-readable `validation/QA_REPORT.md` (the QA report aggregates P12 findings *and* the `warn`-level findings from P5.7 / P10.7). Never skip P12 unless the user types "skip audit / 跳过审计" in the same turn — and even then, log a `phase_skipped` event.
 
 ## P_INCIDENT_POSTCHECK — relapse detector
 

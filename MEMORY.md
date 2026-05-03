@@ -11,7 +11,7 @@ These rules are **load-bearing** and apply to every run. They are read once at s
 
 1. **`P0_intent`** — resolve the user's prompt to a concrete `{ticker, company, listing}` triple. If ambiguous, ask **once**.
 2. **`P0_lang`** — `report_language ∈ {en, zh}`. If not derivable from explicit phrases per `skills_repo/er/SKILL.md` §0A.1, ask the bilingual gate question and **stop until answered**. Do not infer from chat language alone.
-3. **`P0_sec_email`** — only when `listing == US` AND `Mode A` (no PDFs uploaded) AND `USER.md` has no sticky decision. Ask for a real email or accept explicit decline. Reject obvious placeholders (`example.com`, `test@test`, `user@localhost`) with one re-ask.
+3. **`P0_sec_email`** — only when `listing == US` AND `Mode A` (no PDFs uploaded) AND `USER.md` has no sticky decision. Ask for a real email or accept explicit decline. Reject obvious placeholders (`example.com`, `test@test`, `user@localhost`) with one re-ask. Persist `sec_user_agent` for SEC hosts and `public_user_agent` for all non-SEC HTTP; the latter must contain no email.
 4. **`P0_palette`** — `palette ∈ {macaron, default, b, c}`. Ask before any EP work.
 
 `USER.md` may pre-fill any of P0_lang / P0_sec_email / P0_palette as sticky preferences.

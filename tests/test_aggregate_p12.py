@@ -115,6 +115,28 @@ def test_warn_when_only_db_layer_warns(tmp_path: Path) -> None:
     assert "WARN" in qa
 
 
+def test_fail_when_user_agent_pii_guard_fails(tmp_path: Path) -> None:
+    rd = _seed(
+        tmp_path,
+        recon_rows=[{"slot_path": "x", "slot_value": "1", "status": "pass"}],
+        ocr_summary={"engine": "tesseract", "status": "pass", "key_misses": [], "decorative_misses": []},
+        web_envelope={"status": "pass", "targets": []},
+        db_cross={"status": "no_priors", "checks": []},
+    )
+    meta = json.loads((rd / "meta" / "run.json").read_text(encoding="utf-8"))
+    meta.update({
+        "sec_email": "user@example-real.com",
+        "sec_user_agent": "EquityResearchSkill/1.0 (user@example-real.com)",
+    })
+    (rd / "meta" / "run.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    out = aggregate_p12.aggregate(rd)
+
+    assert out["status"] == "fail"
+    assert out["layers"]["user_agent_pii"]["status"] == "fail"
+    assert (rd / "validation" / "user_agent_pii.json").exists()
+
+
 def test_zh_qa_report(tmp_path: Path) -> None:
     rd = _seed(
         tmp_path,

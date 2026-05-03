@@ -44,6 +44,15 @@ REQUIRED_MARKERS = (
 
 PLACEHOLDER_RE = re.compile(r"\{\{[A-Z0-9_]+\}\}")
 
+PORTER_PANELS = ("company", "industry", "forward")
+PORTER_FORCES = (
+    ("供应商议价能力", "supplier power"),
+    ("买方议价能力", "buyer power"),
+    ("新进入者威胁", "threat of new entrants"),
+    ("替代品威胁", "threat of substitutes"),
+    ("行业竞争强度", "competitive rivalry"),
+)
+
 
 def _find_single_report(research_dir: Path) -> Path | None:
     candidates = sorted(
@@ -69,6 +78,70 @@ def _find_skeleton(research_dir: Path, lang: str) -> Path | None:
 
 def _count(soup: BeautifulSoup, selector: str) -> int:
     return len(soup.select(selector))
+
+
+def _porter_li_start_ok(text: str, zh_force: str, en_force: str) -> bool:
+    text = " ".join(text.split())
+    zh_patterns = (
+        rf"^经QC合议，维持{re.escape(zh_force)}为[1-5]分。",
+        rf"^经QC合议，决定将{re.escape(zh_force)}评分维持[1-5]分不变。",
+        rf"^经QC合议，决定将{re.escape(zh_force)}评分从[1-5]分调整为[1-5]分。",
+        rf"^基于初稿评分，{re.escape(zh_force)}为[1-5]分。",
+    )
+    if any(re.search(pattern, text) for pattern in zh_patterns):
+        return True
+
+    lower = text.lower()
+    force = re.escape(en_force.lower())
+    en_patterns = (
+        rf"^dual-qc deliberation maintained (the )?{force} at [1-5]/5\.",
+        rf"^after dual-qc deliberation, (the )?{force} remains [1-5]/5\.",
+        rf"^dual-qc deliberation adjusted (the )?{force} score from [1-5] to [1-5]/5\.",
+        rf"^per draft scoring, (the )?{force} stands at [1-5]/5\.",
+    )
+    return any(re.search(pattern, lower) for pattern in en_patterns)
+
+
+def _validate_porter_texts(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    for panel in PORTER_PANELS:
+        panel_selector = f"#porter-panel-{panel}"
+        panel_node = soup.select_one(panel_selector)
+        if panel_node is None:
+            errors.append(f"missing Porter panel for text validation: {panel_selector}")
+            continue
+
+        text_node = panel_node.select_one(".porter-text")
+        if text_node is None:
+            errors.append(f"{panel_selector} missing .porter-text container")
+            continue
+
+        uls = text_node.find_all("ul")
+        if len(uls) != 1:
+            errors.append(f"{panel_selector} .porter-text must contain exactly one <ul>; got {len(uls)}")
+            continue
+
+        lis = uls[0].find_all("li", recursive=False)
+        if len(lis) != 5:
+            errors.append(f"{panel_selector} .porter-text <ul> must contain exactly five direct <li>; got {len(lis)}")
+            continue
+
+        for idx, (li, (zh_force, en_force)) in enumerate(zip(lis, PORTER_FORCES), start=1):
+            li_text = li.get_text(" ", strip=True)
+            if not li_text:
+                errors.append(f"{panel_selector} .porter-text li[{idx}] is empty")
+                continue
+            if not _porter_li_start_ok(li_text, zh_force, en_force):
+                errors.append(
+                    f"{panel_selector} .porter-text li[{idx}] must start with the whitelisted "
+                    f"QC/no-QC sentence for {zh_force}/{en_force}"
+                )
+            if len(li_text) < 24:
+                warnings.append(f"{panel_selector} .porter-text li[{idx}] is very short")
+
+    return errors, warnings
 
 
 def validate_html_report(html_path: Path, skeleton_path: Path | None = None) -> dict[str, Any]:
@@ -115,6 +188,9 @@ def validate_html_report(html_path: Path, skeleton_path: Path | None = None) -> 
         "kpi_card": _count(soup, "#section-financials .kpi-card"),
         "trend_card": _count(soup, "#section-financials .trend-card"),
         "porter_panel": _count(soup, '[id^="porter-panel-"]'),
+        "porter_text": _count(soup, "#section-porter .porter-text"),
+        "porter_text_ul": _count(soup, "#section-porter .porter-text ul"),
+        "porter_text_li": _count(soup, "#section-porter .porter-text ul > li"),
         "sankey_svg": _count(soup, "#chart-sankey-actual") + _count(soup, "#chart-sankey-forecast"),
         "radar_canvas": _count(soup, 'canvas[id^="chart-radar-"]'),
     }
@@ -123,6 +199,9 @@ def validate_html_report(html_path: Path, skeleton_path: Path | None = None) -> 
         "kpi_card": 4,
         "trend_card": 5,
         "porter_panel": 3,
+        "porter_text": 3,
+        "porter_text_ul": 3,
+        "porter_text_li": 15,
         "sankey_svg": 2,
         "radar_canvas": 3,
     }
@@ -130,6 +209,10 @@ def validate_html_report(html_path: Path, skeleton_path: Path | None = None) -> 
         got = structural_counts[key]
         if got < need:
             errors.append(f"locked report structure incomplete: {key} count {got} < {need}")
+
+    porter_errors, porter_warnings = _validate_porter_texts(soup)
+    errors.extend(porter_errors)
+    warnings.extend(porter_warnings)
 
     script_text = "\n".join(node.get_text("\n") for node in soup.find_all("script"))
     for var_name in ("waterfallData", "sankeyActualData", "sankeyForecastData", "porterScores"):

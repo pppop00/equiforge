@@ -1,4 +1,4 @@
-"""P12 aggregator — combine the four layer reports into one verdict + a human QA_REPORT.md.
+"""P12 aggregator — combine audit layer reports into one verdict + a human QA_REPORT.md.
 
 Layer inputs (all written by their respective tools earlier in the phase):
 
@@ -6,14 +6,15 @@ Layer inputs (all written by their respective tools earlier in the phase):
     <run>/validation/ocr_summary.json            (layer 2)
     <run>/validation/web_third_check.json        (layer 3)
     <run>/validation/db_cross.json               (layer 4)
+    <run>/validation/user_agent_pii.json         (privacy guard; written by this aggregator)
 
 Outputs:
 
     <run>/validation/post_card_audit.json        machine-readable
     <run>/validation/QA_REPORT.md                human-readable, in report_language
 
-Exit code: 0 if status in {pass, warn}, 1 if status == fail. Layers 1-3 are
-fail-blocking; layer 4 cold-start is OK.
+Exit code: 0 if status in {pass, warn}, 1 if status == fail. Layers 1-3 and
+the User-Agent PII guard are fail-blocking; layer 4 cold-start is OK.
 
 Usage:
     python tools/audit/aggregate_p12.py --run-dir <path>
@@ -26,6 +27,8 @@ import json
 import sys
 from pathlib import Path
 from typing import Optional
+
+from tools.audit.user_agent_pii import audit_run as audit_user_agent_pii
 
 
 def _load_json(p: Path) -> Optional[dict]:
@@ -68,15 +71,21 @@ def aggregate(run_dir: Path) -> dict:
     layer2 = _load_json(val / "ocr_summary.json") or {"status": "missing"}
     layer3 = _load_json(val / "web_third_check.json") or {"status": "missing"}
     layer4 = _load_json(val / "db_cross.json") or {"status": "missing"}
+    user_agent_pii = audit_user_agent_pii(run_dir)
+    val.mkdir(parents=True, exist_ok=True)
+    (val / "user_agent_pii.json").write_text(
+        json.dumps(user_agent_pii, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     layers = {
         "reconcile": layer1,
         "ocr": layer2,
         "web": layer3,
         "db_cross": layer4,
+        "user_agent_pii": user_agent_pii,
     }
 
-    statuses_blocking = [layer1.get("status"), layer2.get("status"), layer3.get("status")]
+    statuses_blocking = [layer1.get("status"), layer2.get("status"), layer3.get("status"), user_agent_pii.get("status")]
     if any(s == "fail" for s in statuses_blocking):
         overall = "fail"
     elif (
@@ -101,7 +110,6 @@ def aggregate(run_dir: Path) -> dict:
         "layers": layers,
     }
 
-    val.mkdir(parents=True, exist_ok=True)
     (val / "post_card_audit.json").write_text(
         json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -123,6 +131,7 @@ L10N = {
         "layer2": "Layer 2 — PNG OCR",
         "layer3": "Layer 3 — Independent web check",
         "layer4": "Layer 4 — DB cross-validation",
+        "privacy": "Privacy guard — User-Agent PII",
         "rows_checked": "Rows checked",
         "fails": "Fails",
         "warns": "Warns",
@@ -134,6 +143,8 @@ L10N = {
         "verifications_pending": "Verifications pending host LLM",
         "checks": "Checks",
         "operator_actions": "Operator actions",
+        "violations": "Violations",
+        "no_pii": "No SEC email leakage found in captured request logs.",
         "no_fails": "No mismatches.",
         "no_misses": "No key numerics missing in OCR.",
         "no_targets": "No headline numerics flagged for re-verify.",
@@ -150,6 +161,7 @@ L10N = {
         "layer2": "Layer 2 —— PNG OCR 复读",
         "layer3": "Layer 3 —— Web 第三轮事实复查",
         "layer4": "Layer 4 —— DB 历史 / 同行交叉",
+        "privacy": "隐私守卫 —— User-Agent PII",
         "rows_checked": "核对条数",
         "fails": "不通过",
         "warns": "警告",
@@ -161,6 +173,8 @@ L10N = {
         "verifications_pending": "等待宿主 LLM 完成 Web 核查",
         "checks": "检查项",
         "operator_actions": "操作员需关注",
+        "violations": "违规项",
+        "no_pii": "捕获的请求日志中未发现 SEC 邮箱泄露。",
         "no_fails": "未发现不一致。",
         "no_misses": "关键数字均在 OCR 中命中。",
         "no_targets": "未抽到需要复查的头部数字。",
@@ -276,6 +290,25 @@ def _render_qa_report(out: dict) -> str:
             lines.append(f"- {sev_icon} `{check.get('id')}` — {check.get('result')}")
             for fl in (check.get("flags") or []):
                 lines.append(f"    - {json.dumps(fl, ensure_ascii=False)}")
+    lines.append("")
+
+    # Privacy guard
+    l5 = out["layers"]["user_agent_pii"]
+    lines.append(f"## {t['privacy']}  {ICONS.get(l5.get('status'), '—')}")
+    lines.append("")
+    lines.append(f"- `public_user_agent`: `{l5.get('public_user_agent') or '-'}`")
+    violations = l5.get("violations") or []
+    if violations:
+        lines.append("")
+        lines.append(f"### {t['violations']}")
+        for item in violations[:5]:
+            lines.append(
+                f"- `{item.get('file')}`:{item.get('line')} — "
+                f"{', '.join(item.get('non_sec_urls') or [])}"
+            )
+    elif l5.get("status") in {"pass", "warn"}:
+        lines.append("")
+        lines.append(f"_{t['no_pii']}_")
     lines.append("")
 
     # Operator actions

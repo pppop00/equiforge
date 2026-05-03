@@ -18,8 +18,8 @@ Skip and record `P0_sec_email = "skipped"` with `reason` if any of:
 ## Sticky fast-path
 
 If `USER.md:default_sec_email` exists:
-- Value is a plausible email (regex `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, not on the placeholder list) → use it. Set `sec_user_agent = "EquityResearchSkill/1.0 (<that_email>)"`.
-- Value is `decline` / `不提供` / `no_email` → set `sec_email = "declined"`, `sec_user_agent = null`.
+- Value is a plausible email (regex `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, not on the placeholder list) → use it. Set `sec_user_agent = "EquityResearchSkill/1.0 (<that_email>)"` and `public_user_agent = "EquityResearchSkill/1.0"`.
+- Value is `decline` / `不提供` / `no_email` → set `sec_email = "declined"`, `sec_user_agent = null`, and `public_user_agent = "EquityResearchSkill/1.0"`.
 
 Either way, record `source: "USER.md sticky"` and exit.
 
@@ -55,6 +55,7 @@ Accept `no email`, `decline`, `not now`, `不提供`, `不提供邮箱`, `no_ema
   "P0_sec_email": {
     "value": "user@example-real.com",          // or "declined"
     "sec_user_agent": "EquityResearchSkill/1.0 (user@example-real.com)",   // or null
+    "public_user_agent": "EquityResearchSkill/1.0",
     "source": "user_response | USER.md sticky | skipped",
     "skip_reason": "listing != US"             // only if skipped
   }
@@ -63,6 +64,8 @@ Accept `no email`, `decline`, `not now`, `不提供`, `不提供邮箱`, `no_ema
 
 Append to `meta/gates.json`. **The email itself is never written to `db/equity_kb.sqlite`** — see `MEMORY.md` privacy invariants.
 
+Also persist both `sec_user_agent` and `public_user_agent` into `meta/run.json`. `sec_user_agent` is only for SEC EDGAR endpoints (`sec.gov` hosts). Every non-SEC outbound HTTP request must use `public_user_agent`, which must contain no email or other PII.
+
 `source` is a closed enum: `user_response`, `USER.md sticky`, or `skipped` (only when `applies_when` returns false). Auto-mode is not a license to skip this gate — never invent values like `auto_mode_default`. If the user has not replied and no sticky default exists and `applies_when` is true, halt and wait.
 
 ## Pass-down to Agent 1
@@ -70,3 +73,8 @@ Append to `meta/gates.json`. **The email itself is never written to `db/equity_k
 When delegating to `skills_repo/er/agents/financial_data_collector.md`, include exactly one line in the task prompt:
 - `Financial data SEC API: yes` and `SEC_EDGAR_USER_AGENT: EquityResearchSkill/1.0 (user@example-real.com)`, or
 - `Financial data SEC API: no`
+
+When delegating to any agent that may fetch non-SEC pages (news, IR pages, logo/image hosts, peer pages), include:
+- `PUBLIC_USER_AGENT: EquityResearchSkill/1.0`
+
+Do not pass `SEC_EDGAR_USER_AGENT` to non-SEC fetchers as their default User-Agent.

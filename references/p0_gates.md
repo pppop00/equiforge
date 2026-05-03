@@ -31,12 +31,12 @@ Each gate's answer is recorded in `meta/gates.json` with a `source` field. Only 
 
 ## P0_sec_email (interactive gate)
 
-- **Goal**: a real email for the SEC EDGAR `User-Agent` header, or an explicit decline.
+- **Goal**: a real email for the SEC EDGAR `User-Agent` header, or an explicit decline; plus a PII-free `public_user_agent` for every non-SEC fetch.
 - **Agent**: `agents/sec_email_gate.md`.
 - **Sticky source**: `USER.md:default_sec_email`.
 - **`applies_when`**: `listing == "US"` AND `mode == "A"` (no PDFs uploaded) AND no sticky in `USER.md`.
 - **Reject** placeholders: `example.com`, `test@test`, `user@localhost` — re-ask once.
-- **Privacy**: this email is **never** persisted. Lives only as a runtime arg to `tools/research/sec_edgar_fetch.py`. See `MEMORY.md` privacy invariants.
+- **Privacy**: this email is **never** persisted to the DB. It may appear in `meta/run.json` / `meta/gates.json` only as `sec_email` and `sec_user_agent`, and must be used only for SEC EDGAR hosts. `public_user_agent` must be present, must contain no email, and is the only allowed User-Agent for logo, IR, news, peer, image, and other third-party fetches. P12 enforces this with `tools/audit/user_agent_pii.py`.
 - **Allowed `source` values**: `user_response`, `USER.md sticky`, `skipped` (when `applies_when` is false), `declined`.
 
 ## P0_palette (interactive gate)

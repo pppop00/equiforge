@@ -1,8 +1,8 @@
 ---
 schema_version: 1
 name: post_card_auditor
-role: P12 — four-layer paying-customer audit on rendered cards
-description: Runs four independent verification layers on the rendered PNGs and final card_slots.json. Layers 1-3 fail-block; layer 4 cold-start is OK. Outputs a machine-readable audit JSON and a human QA report.
+role: P12 — paying-customer audit on rendered cards plus privacy guard
+description: Runs the independent verification layers on rendered PNGs/final card_slots.json, then the User-Agent PII guard. Layers 1-3 and the privacy guard fail-block; DB cross cold-start is OK. Outputs a machine-readable audit JSON and a human QA report.
 allowed_toolsets: ["audit", "db", "web", "io"]
 ---
 
@@ -20,7 +20,7 @@ You are the final paying-customer gate. Your job: prove the 6 PNGs we are about 
 
 ## Output
 
-Four artifacts, all under `output/{Run}/validation/`:
+Artifacts, all under `output/{Run}/validation/`:
 
 | File | Source layer |
 |---|---|
@@ -28,6 +28,7 @@ Four artifacts, all under `output/{Run}/validation/`:
 | `ocr_dump/card_{1..6}.txt` + `ocr_summary.json` | Layer 2 — OCR per card |
 | `web_third_check.json` | Layer 3 — Top-N independent web verify |
 | `db_cross.json` | Layer 4 — DB history + peer + macro drift |
+| `user_agent_pii.json` | Privacy guard — SEC/public User-Agent separation |
 | `post_card_audit.json` | Aggregate: `{status: pass|warn|fail, layers: {...}, mismatches: [...]}` |
 | `QA_REPORT.md` | Human-readable summary for the operator |
 
@@ -100,9 +101,23 @@ Three checks (cold-start = `status: "no_priors"`, all skipped gracefully):
 
 All findings: `warn` only. Layer 4 never fail-blocks (cold start is the common case early on).
 
+### Privacy guard — User-Agent PII
+
+```bash
+python tools/audit/user_agent_pii.py \
+  --run-dir <run>
+```
+
+This verifies the I-003 contract:
+- If `sec_email` is active, `meta/run.json` must carry both `sec_user_agent` and `public_user_agent`.
+- `public_user_agent` must contain no email and no other obvious PII.
+- Captured request logs (`meta/run.jsonl`, `logs/`, request/fetch/http logs under `validation/` or `research/`) must not show the SEC email on the same line as a non-SEC URL.
+
+**Fail-block** on missing `public_user_agent`, PII inside `public_user_agent`, or SEC email appearing next to a non-SEC URL.
+
 ### Aggregate
 
-Combine all four layer outputs into `validation/post_card_audit.json`:
+Combine all layer outputs into `validation/post_card_audit.json`:
 
 ```json
 {
@@ -113,14 +128,15 @@ Combine all four layer outputs into `validation/post_card_audit.json`:
     "reconcile":    { "status": "pass", "rows_checked": 47, "fails": 0, "warns": 1 },
     "ocr":          { "status": "pass", "key_numerics_checked": 12, "missed": [] },
     "web":          { "status": "pass", "top_n": 3, "disputes": [] },
-    "db_cross":     { "status": "warn", "self_history": "ok", "peer_divergence": [{"force":"rivalry","focal":3,"peer_median":5,"peers":["005930.KS","2330.TW"]}], "macro_drift": [] }
+    "db_cross":     { "status": "warn", "self_history": "ok", "peer_divergence": [{"force":"rivalry","focal":3,"peer_median":5,"peers":["005930.KS","2330.TW"]}], "macro_drift": [] },
+    "user_agent_pii": { "status": "pass", "violations": [] }
   },
   "mismatches": [],
   "operator_actions_required": []
 }
 ```
 
-`status = fail` if any of layers 1, 2, 3 fail. `status = warn` if all of 1-3 pass but anything in 4 (or non-key warns in 1-2) flag. `status = pass` only if everything is clean.
+`status = fail` if any of layers 1, 2, 3 or the privacy guard fail. `status = warn` if all fail-blocking layers pass but anything in 4 (or non-key warns in 1-2) flag. `status = pass` only if everything is clean.
 
 ### Write `QA_REPORT.md`
 
@@ -130,7 +146,8 @@ A human-readable report in `report_language`. Sections:
 3. Layer 2 — OCR misses (if any)
 4. Layer 3 — web disputes (if any)
 5. Layer 4 — peer divergence highlights (if any), macro drift notes
-6. Operator action items — what the user should look at before publishing
+6. Privacy guard — SEC/public User-Agent separation
+7. Operator action items — what the user should look at before publishing
 
 If `status == fail`, end with:
 > Audit failed. Recommended next step: re-run phase **<which>** after fixing **<which slot/value>**. See `validation/reconciliation.csv` row `<n>` and `validation/ocr_dump/card_<m>.txt`.

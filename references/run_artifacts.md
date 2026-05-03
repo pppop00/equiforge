@@ -12,7 +12,7 @@ Every run lands in `output/{Company}_{Date}_{RunID}/` with this fixed structure.
 | `meta/` | `run.jsonl` event log, `system_prompt.frozen.txt`, `gates.json`, `submodule_shas.json`, `workflow_meta.snapshot.json`, `run.json` (resolved `{ticker, company, listing, report_language, sec_email, palette}`) |
 | `research/` | All ER JSON artifacts + the locked-template HTML report (`{Company}_Research_{CN\|EN}.html`) + `cross_validation.json` + `report_validation.txt` + `structure_conformance.json` |
 | `cards/` | `logo/{slug}_wordmark.png` + `{stem}.card_slots.json` + 6 PNGs (`01_cover.png` … `06_post_copy.png`) + `validator1_report.json` + `validator2_report.json` |
-| `validation/` | P12 four-layer audit: `post_card_audit.json`, `QA_REPORT.md`, `reconciliation.csv`, `ocr_dump/card_{1..6}.txt`, `web_third_check.json`, `db_cross.json` |
+| `validation/` | P12 audit: `post_card_audit.json`, `QA_REPORT.md`, `reconciliation.csv`, `ocr_dump/card_{1..6}.txt`, `web_third_check.json`, `db_cross.json`, `user_agent_pii.json` |
 | `db_export/` | `rows_written.json`, `peer_context.json`, `prior_financials_used.json`, `db_index_summary.json` (and `index_error.json` on failure) |
 | `logs/` | `tools.jsonl` per-tool telemetry |
 

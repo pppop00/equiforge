@@ -54,7 +54,7 @@ If `USER.md:default_language` is set → record it as the gate answer with `sour
 
 ### 4. P0_sec_email (interactive gate)
 
-Apply the `applies_when` rule from `workflow_meta.json`: only run if `listing == "US"` AND mode A (no PDFs uploaded) AND `USER.md:default_sec_email` is unset. If `applies_when` is false, record `source: "skipped"`. Otherwise delegate to `agents/sec_email_gate.md` and **halt and wait for the user's actual reply** before doing anything else. Persist `sec_email` and `sec_user_agent`.
+Apply the `applies_when` rule from `workflow_meta.json`: only run if `listing == "US"` AND mode A (no PDFs uploaded) AND `USER.md:default_sec_email` is unset. If `applies_when` is false, record `source: "skipped"`. Otherwise delegate to `agents/sec_email_gate.md` and **halt and wait for the user's actual reply** before doing anything else. Persist `sec_email`, `sec_user_agent`, and `public_user_agent`. `sec_user_agent` is only for SEC EDGAR hosts; every non-SEC fetcher must receive and use `public_user_agent`.
 
 ### 5. P0_palette (interactive gate)
 
@@ -98,9 +98,10 @@ Delegate to `skills_repo/er/agents/qc_macro_peer_a.md` and `qc_macro_peer_b.md` 
 
 ### 12. P3 / P3.5 / P3.6 — Porter + QC + merge
 
-- Inline: produce `porter_analysis.json` (three perspectives × five forces).
+- Inline: produce `porter_analysis.json` (three perspectives × five forces). **Each perspective MUST be a dict with both `scores` (5 ints, 1–5) and the five force keys `supplier_power` / `buyer_power` / `new_entrants` / `substitutes` / `rivalry`, each a non-empty string. The flat `{scores, narrative}` shape is forbidden** (see `INCIDENTS.md` I-004 — the writer cannot synthesise five `<li>` from a single sentence).
+- **P3 schema gate**: immediately after `porter_analysis.json` is written, run `python tools/research/validate_porter_analysis.py --run-dir <run_dir>`. **Capture exit code; exit 0 is required.** Critical → halt the Porter sub-pipeline and rerun the Porter draft with the correct schema (do not advance to Phase 3.5 / 3.6 / 4 / 5 with a malformed `porter_analysis.json`). The same validator runs again as a P5 entry precondition inside `report_validator.md` §0.3.
 - Parallel: `qc_porter_peer_a.md` and `qc_porter_peer_b.md`.
-- Sequential merge: `qc_resolution_merge.md` writes `qc_audit_trail.json` and updates `prediction_waterfall.json` + `porter_analysis.json` in place.
+- Sequential merge: `qc_resolution_merge.md` writes `qc_audit_trail.json` and updates `prediction_waterfall.json` + `porter_analysis.json` in place. After the merge updates `porter_analysis.json`, rerun the schema gate; merging must not regress the shape.
 
 Apply the QC scoring math from `MEMORY.md` exactly: `weighted = 0.34·draft + 0.33·a + 0.33·b`; only change scores when `|weighted − draft| > 1.00`.
 
@@ -112,7 +113,7 @@ Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.
 
 - P4: inject Sankey payload into `financial_analysis.json`.
 - P5: extract the locked HTML skeleton via `tools/research/extract_template.py --lang <cn|en> --run-dir <run_dir> --sha256`. Verify `research/_locked_<lang>_skeleton.html` exists on disk before delegating — if it does not, halt; do not let the report writer "skip" extraction. Delegate to `report_writer_{cn,en}.md` with all JSONs as input. Substitute `{{PLACEHOLDER}}` markers only — never edit structure. The final report must be produced by filling the extracted `_locked_<lang>_skeleton.html`; hand-written replacement HTML is invalid even if the data is correct. **There is no institution-compatible / private-company / scope-limited bypass.** Every company — public, private fund, hedge fund, family office, government entity, anything — fills the same locked skeleton. When issuer-level statements are unavailable (e.g. RA Capital, a private investment manager), the report writer fills the locked sections with the best available proxies (AUM, strategy, top holdings, manager-level filings, peer macro, etc.) and labels residual gaps inline; it does **not** drop sections, shorten the template, or emit a hand-written page.
-- P5_gate: immediately run `python tools/research/validate_report_html.py --run-dir <run_dir> --lang <cn|en>`. **Capture the exit code; exit 0 is required.** If it fails on line count (<500 lines), missing section IDs, missing `LOCKED JAVASCRIPT`, missing chart variables, or unreplaced `{{PLACEHOLDER}}`, discard that HTML and rerun P5 from the extracted skeleton. You may not paraphrase the gate's verdict, you may not declare it `not_applicable`, and you may not invent statuses like `pass_with_scope_limitations`. The gate's JSON output is the authoritative `html_template_gate` value carried into P6.
+- P5_gate: immediately run `python tools/research/validate_report_html.py --run-dir <run_dir> --lang <cn|en>` **and** `python tools/research/validate_porter_analysis.py --run-dir <run_dir>`. **Capture both exit codes; both must be 0.** `validate_report_html.py` failing on line count (<500 lines), missing section IDs, missing `LOCKED JAVASCRIPT`, missing chart variables, or unreplaced `{{PLACEHOLDER}}` → discard that HTML and rerun P5 from the extracted skeleton. `validate_porter_analysis.py` failing on `{scores, narrative}` flat shape, missing force keys, or invalid scores → halt and rerun **Phase 3** (Porter draft) with the correct per-force schema; do not let P5 paper over a malformed `porter_analysis.json`. You may not paraphrase either gate's verdict, you may not declare them `not_applicable`, and you may not invent statuses like `pass_with_scope_limitations`. The HTML gate's JSON output is the authoritative `html_template_gate` value carried into P6.
 - P5.5: delegate to `final_report_data_validator.md`. CRITICAL findings → loop back to P5 with the report writer's same agent (cap 2). 0 CRITICAL → proceed.
 - **P5.7 RED TEAM**: write `meta/red_team/P5_7_RED_TEAM.input.json` with absolute paths to the locked-template HTML, all upstream `research/*.json`, `research/cross_validation.json`, and the P5.5 validator output. Then delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md`. Both must complete. They write `validation/red_team_numeric_P5_7_RED_TEAM.json` and `validation/red_team_narrative_P5_7_RED_TEAM.json`. If either reports `summary.critical > 0`, build a single combined revision request from both attackers' challenge lists and loop back to `P5_html` once (red-team retry cap = 1, separate from the P5.5 retry cap of 2). A second critical from the red team after the loop = halt and surface to user. `warn` findings are appended to `validation/QA_REPORT.md` (later, at P12) but do not block.
 - P6: tool `tools/research/packaging_check.py` then delegate to `report_validator.md` for final structural review. `packaging_check.py` repeats the locked-template HTML gate and writes `html_template_gate` into `structure_conformance.json`; a critical gate result blocks all EP card phases. Selects packaging profile from the **four** whitelisted in `workflow_meta.json -> packaging_profiles` only — never invent a new profile name (e.g. `institution_compat_*`, `private_company_*`, `scope_limited_*`); the picker is `(qc_mode, sec_api_mode)` and that is the only valid input. `report_validation.txt`'s top-line status is one of `pass | warn | critical`; `pass_with_scope_limitations` and similar freeform statuses are fabrications and the run is not deliverable.
@@ -136,8 +137,9 @@ Delegate to `agents/post_card_auditor.md`. It runs four layers in order:
 2. `tools/audit/ocr_cards.py` — OCR the 6 PNGs; every key numeric appears in pixels.
 3. `tools/audit/web_third_check.py` — Top-3 numbers re-verified via web search (independent of Validator 2).
 4. `tools/audit/db_cross_validate.py` — cross-check vs DB history + peers + macro snapshot.
+5. `tools/audit/user_agent_pii.py` — verify `public_user_agent` exists when SEC email is active and scan captured request logs for the SEC email next to non-SEC URLs.
 
-Layers 1–3 fail-block; layer 4 cold-start is OK. Output: `validation/post_card_audit.json` + human-readable `validation/QA_REPORT.md`.
+Layers 1–3 and layer 5 fail-block; layer 4 cold-start is OK. Output: `validation/post_card_audit.json` + human-readable `validation/QA_REPORT.md`.
 
 ### 16.5. P_INCIDENT_POSTCHECK
 
@@ -145,6 +147,8 @@ Before `P_DB_INDEX`, re-read `INCIDENTS.md`. For each entry, confirm its detecti
 
 - I-001 (P0 interactive gate bypass) → check `meta/gates.json`: every interactive gate's `source` must be in the whitelist (`user_response`, `USER.md sticky`, plus per-gate extras). Any string not in the whitelist = `flagged`.
 - I-002 (P5 simplified template) → check `research/structure_conformance.json -> html_template_gate.status == "pass"`, `research/report_validation.txt`'s top-line status ∈ {`pass`, `warn`, `critical`}, `structure_conformance.json -> profile` ∈ the four whitelisted `strict_*`. Any deviation = `flagged`.
+- I-003 (SEC User-Agent leaked to non-SEC fetches) → check `validation/user_agent_pii.json -> status != "fail"` and `meta/run.json -> public_user_agent` contains no email. Any failure = `flagged`.
+- I-004 (Porter free narrative in HTML) → check `research/structure_conformance.json -> html_template_gate.status == "pass"` from the upgraded `tools/research/validate_report_html.py`, including `.porter-text` list validation. Any critical = `flagged`.
 - (Future incidents — same pattern: each entry's `Detection` field tells you what to check.)
 
 Write `validation/incident_postcheck.json`:

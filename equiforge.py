@@ -114,6 +114,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         ("layer 2 — OCR",        [sys.executable, str(TOOLS / "audit" / "ocr_cards.py"), "--run-dir", str(run_dir), "--lang", args.lang]),
         ("layer 3 — web envelope", [sys.executable, str(TOOLS / "audit" / "web_third_check.py"), "--run-dir", str(run_dir), "--top-n", str(args.top_n)]),
         ("layer 4 — DB cross",   [sys.executable, str(TOOLS / "audit" / "db_cross_validate.py"), "--run-dir", str(run_dir)]),
+        ("privacy — User-Agent PII", [sys.executable, str(TOOLS / "audit" / "user_agent_pii.py"), "--run-dir", str(run_dir)]),
     ]
     for name, cmd in layers:
         print(f"\n>>> {name}")

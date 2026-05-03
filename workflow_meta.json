@@ -36,7 +36,7 @@
     },
     {
       "id": "P0_sec_email",
-      "produces": ["meta/run.json:sec_email", "meta/run.json:sec_user_agent"],
+      "produces": ["meta/run.json:sec_email", "meta/run.json:sec_user_agent", "meta/run.json:public_user_agent"],
       "blocking": true,
       "interactive": true,
       "parallelism": "sequential",
@@ -335,7 +335,8 @@
         "validation/reconciliation.csv",
         "validation/ocr_dump/card_{1..6}.txt",
         "validation/web_third_check.json",
-        "validation/db_cross.json"
+        "validation/db_cross.json",
+        "validation/user_agent_pii.json"
       ],
       "blocking": true,
       "interactive": false,
@@ -363,6 +364,11 @@
           "tool": "tools/audit/db_cross_validate.py",
           "fail_blocks": false,
           "cold_start_ok": true
+        },
+        {
+          "name": "user_agent_pii",
+          "tool": "tools/audit/user_agent_pii.py",
+          "fail_blocks": true
         }
       ]
     },

@@ -65,6 +65,7 @@ For per-gate rules, the full whitelist of allowed `source` values, and rejection
 | First-time setup | `python equiforge.py init` (builds `db/equity_kb.sqlite` from `db/schema/`) |
 | Pre-flight | `pytest -q` (must be green) and `python tools/research/validate_workflow_meta.py` (validates equiforge's root contract; pass `--target er` to also check the ER submodule contract) |
 | Bootstrap a run dir | `python tools/io/run_dir.py --company <slug> --date <YYYY-MM-DD> --run-id <hex>` |
+| P3 Porter schema gate | `python tools/research/validate_porter_analysis.py --run-dir <path>` (must pass before P3.5; reruns at P5 entry — `INCIDENTS.md` I-004) |
 | P5 HTML gate | `python tools/research/validate_report_html.py --run-dir <path> --lang <cn\|en>` (must pass before P6/P7) |
 | Index a finished run | `python tools/db/index_run.py --run-dir <path>` (only after P12 passes and `P_INCIDENT_POSTCHECK` has `flagged: []`) |
 
