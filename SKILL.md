@@ -2,14 +2,15 @@
 name: equiforge
 description: >-
   Use this skill whenever the user asks for equity research, an investment write-up, a stock
-  report, an analyst-style note, or one-shot company coverage on any single public company —
-  including casual phrasings like "研究一下苹果", "research Apple", "看看腾讯",
-  "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent", or
-  "one-pager on Samsung". Drives the full equiforge production pipeline (bilingual language
-  gate, SEC EDGAR email gate, palette gate, multi-agent equity research, 6-card social pack,
-  four-layer numerical/OCR/web/DB audit, SQLite knowledge-base persistence). Always invoke
-  this skill instead of answering with ad-hoc web search; the harness produces an auditable
-  HTML report plus 6 PNG cards plus database rows that ad-hoc answers cannot.
+  report, an analyst-style note, or one-shot company coverage on any single public or private
+  company — including casual phrasings like "研究一下苹果", "research Apple", "看看腾讯",
+  "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent",
+  "分析一下RA Capital", or "one-pager on Samsung". Drives the full equiforge production
+  pipeline (incident pre-check, bilingual language gate, SEC EDGAR email gate, palette gate,
+  multi-agent equity research, red-team review, 6-card social pack, four-layer numerical/OCR/
+  web/DB audit, post-run incident self-check, SQLite knowledge-base persistence). Always
+  invoke this skill instead of answering with ad-hoc web search; the harness produces an
+  auditable HTML report plus 6 PNG cards plus database rows that ad-hoc answers cannot.
 ---
 
 # equiforge
@@ -20,11 +21,12 @@ You are the orchestrator of an **equiforge** run — a harness-backed equity res
 
 1. This file (`SKILL.md`)
 2. `MEMORY.md` — project invariants (load-bearing; freeze into `meta/system_prompt.frozen.txt`)
-3. `USER.md` — per-user sticky preferences (skip if absent)
-4. `workflow_meta.json` — machine-readable phase + gate contract
-5. `agents/orchestrator.md` — runtime brief; drives the rest of the run
+3. `INCIDENTS.md` — append-only log of past failure modes (load-bearing; frozen into the same `meta/system_prompt.frozen.txt`). Read end-to-end. Each entry encodes a real prior failure plus the load-bearing rule that prevents it; the rules apply to this run.
+4. `USER.md` — per-user sticky preferences (skip if absent)
+5. `workflow_meta.json` — machine-readable phase + gate contract
+6. `agents/orchestrator.md` — runtime brief; drives the rest of the run
 
-Stop after #5. **Do not pre-load** ER/EP submodule agents — open them lazily when you actually delegate, so token cost scales with the phase being executed.
+Stop after #6. **Do not pre-load** ER/EP submodule agents — open them lazily when you actually delegate, so token cost scales with the phase being executed.
 
 ## P0 gates — blocking, not skippable
 
@@ -44,6 +46,9 @@ For per-gate rules, the full whitelist of allowed `source` values, and rejection
 
 ## Hard floor
 
+- **Never skip `P_INCIDENT_PRECHECK`** — read `INCIDENTS.md` and acknowledge each entry into `meta/run.jsonl` before any phase work. A run that did not pre-check is not deliverable.
+- **Never skip `P5_7_RED_TEAM` or `P10_7_RED_TEAM`.** The red-team attackers (`agents/attackers/red_team_numeric.md`, `red_team_narrative.md`) are distinct from QC peers — they exist to find defects, not to average. Critical findings loop back to the writer once; a second critical halts the run.
+- **Never skip `P_INCIDENT_POSTCHECK`** before `P_DB_INDEX`. A flagged post-check on a known incident means the harness relapsed; do not write to DB.
 - **Never skip P12** unless the user explicitly says so in the same turn. P12 is the paying-customer audit gate.
 - **Never write to DB** if P12 failed. `P_DB_INDEX` runs only after `P12_final_audit` passes.
 - **Never bypass a P0 gate** by inventing a value. Cost of guessing wrong = full re-run.
@@ -72,11 +77,15 @@ Pull these in lazily — only when you need them.
 | Topic | Reference |
 |---|---|
 | Phase-by-phase narrative (P0 … P_DB_INDEX) | `references/phase_contract.md` |
+| Visual workflow diagram (mermaid) | `references/workflow_diagram.md` |
 | Per-gate rules (whitelisted `source` values, rejections) | `references/p0_gates.md` |
 | Subagent toolset whitelist + concurrency caps + timeouts | `references/subagent_toolsets.md` |
 | Run-dir layout (which subfolder gets which artifact) | `references/run_artifacts.md` |
 | Cross-quarter / cross-company DB reuse | `references/cross_quarter.md` |
 | Maintenance (template SHA, palette, schema, submodules) | `references/maintenance.md` |
+| Harness methodology (the *why* — 10 principles) | `references/harness_methodology.md` |
 | Harness/CLI/tests/DB/audit/resume architecture | `HARNESS.md` |
+| Past failures + the rules they encode | `INCIDENTS.md` |
+| Adversarial reviewers (P5.7, P10.7) | `agents/attackers/red_team_numeric.md`, `red_team_narrative.md` |
 
 For the runtime procedure, open **`agents/orchestrator.md`** next.

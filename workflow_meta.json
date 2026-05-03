@@ -4,6 +4,16 @@
   "description": "End-to-end equity research + social card pipeline with persistent knowledge base and four-layer audit. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
   "phases": [
     {
+      "id": "P_INCIDENT_PRECHECK",
+      "produces": ["meta/run.jsonl:incident_precheck.acknowledged"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "inline": true,
+      "executor_note": "Orchestrator reads INCIDENTS.md end-to-end before P0_intent. For each entry I-NNN it appends an incident_precheck.acknowledged event to meta/run.jsonl with the incident id and a one-line acknowledgement. Novel-looking matches against the current target (e.g. private-fund target → I-002) require a stricter posture in downstream phases.",
+      "reads": ["INCIDENTS.md"]
+    },
+    {
       "id": "P0_intent",
       "produces": ["meta/run.json:ticker", "meta/run.json:company", "meta/run.json:listing"],
       "blocking": true,
@@ -202,6 +212,26 @@
       "retry_cap": 2
     },
     {
+      "id": "P5_7_RED_TEAM",
+      "produces": [
+        "validation/red_team_numeric_P5_7_RED_TEAM.json",
+        "validation/red_team_narrative_P5_7_RED_TEAM.json",
+        "meta/red_team/P5_7_RED_TEAM.input.json"
+      ],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "parallel",
+      "concurrency": 2,
+      "agents": [
+        "agents/attackers/red_team_numeric.md",
+        "agents/attackers/red_team_narrative.md"
+      ],
+      "retry_to": "P5_html",
+      "retry_cap": 1,
+      "loop_rule": "if either attacker reports critical>0, loop once back to P5_html with both attackers' findings combined into a single revision request; second critical halts and surfaces to user",
+      "executor_note": "Adversarial review of the locked-template HTML and upstream research JSONs. Distinct from QC peer agents (which average) — these attackers succeed when they find a real defect."
+    },
+    {
       "id": "P6_pkg",
       "produces": ["research/report_validation.txt", "research/structure_conformance.json"],
       "blocking": true,
@@ -268,6 +298,26 @@
       "retry_cap": 3
     },
     {
+      "id": "P10_7_RED_TEAM",
+      "produces": [
+        "validation/red_team_numeric_P10_7_RED_TEAM.json",
+        "validation/red_team_narrative_P10_7_RED_TEAM.json",
+        "meta/red_team/P10_7_RED_TEAM.input.json"
+      ],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "parallel",
+      "concurrency": 2,
+      "agents": [
+        "agents/attackers/red_team_numeric.md",
+        "agents/attackers/red_team_narrative.md"
+      ],
+      "retry_to": "P9_layout",
+      "retry_cap": 1,
+      "loop_rule": "if either attacker reports critical>0, loop once back to P9_layout (or P8_content if the defect is content-level, not layout-level); second critical halts and surfaces to user",
+      "executor_note": "Adversarial review of card_slots.json across all six cards. Checks numeric realizability, palette consistency, logo path, and cross-card narrative coherence."
+    },
+    {
       "id": "P11_render",
       "produces": ["cards/01_cover.png", "cards/02_background_industry.png", "cards/03_revenue.png", "cards/04_business_outlook.png", "cards/05_brand.png", "cards/06_post_copy.png"],
       "blocking": true,
@@ -316,6 +366,18 @@
       ]
     },
     {
+      "id": "P_INCIDENT_POSTCHECK",
+      "produces": ["validation/incident_postcheck.json"],
+      "blocking": true,
+      "interactive": false,
+      "parallelism": "sequential",
+      "inline": true,
+      "runs_after": "P12_final_audit",
+      "executor_note": "Orchestrator re-reads INCIDENTS.md and confirms each entry's detection signal is green for this run. Output JSON has one entry per incident with status: pass | flagged plus evidence path. flagged blocks P_DB_INDEX and surfaces to user — a flagged post-check on a known incident means the harness shipped a relapse.",
+      "reads": ["INCIDENTS.md"],
+      "on_flagged": "block P_DB_INDEX; surface to user with paths to the flagged incident's detection signal"
+    },
+    {
       "id": "P_DB_INDEX",
       "produces": [
         "db_export/rows_written.json",
@@ -327,7 +389,9 @@
       "interactive": false,
       "parallelism": "sequential",
       "tool": "tools/db/index_run.py",
-      "runs_after": "P12_final_audit",
+      "runs_after": "P_INCIDENT_POSTCHECK",
+      "requires": ["P12_final_audit", "P_INCIDENT_POSTCHECK"],
+      "requires_note": "P12_final_audit must report pass (or warn-only) AND P_INCIDENT_POSTCHECK must report flagged: []. Either failing blocks DB write — runners must check both, not just runs_after.",
       "transactional": true,
       "on_failure": "rollback; mark runs.run_status='failed'; still admit append-only tables (intelligence_signals, disclosure_quirks)"
     }
@@ -354,7 +418,8 @@
       "purpose": "Equity Photo Skill — card pipeline P7..P11"
     }
   },
-  "memory_files": ["MEMORY.md", "USER.md"],
+  "memory_files": ["MEMORY.md", "INCIDENTS.md", "USER.md"],
+  "memory_files_note": "MEMORY.md and INCIDENTS.md are load-bearing and must both be frozen verbatim into meta/system_prompt.frozen.txt at session start. USER.md is included only if present (gitignored). Order in this list is the read order at bootstrap.",
   "freeze_system_prompt_at": "session_start",
   "system_prompt_audit_path": "meta/system_prompt.frozen.txt"
 }

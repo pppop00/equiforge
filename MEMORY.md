@@ -5,7 +5,7 @@ description: Project-level invariants frozen into the system prompt at session s
 
 # equiforge — Project Memory
 
-These rules are **load-bearing** and apply to every run. They are read once at session start and frozen into `meta/system_prompt.frozen.txt`.
+These rules are **load-bearing** and apply to every run. They are read once at session start and frozen into `meta/system_prompt.frozen.txt`. `INCIDENTS.md` is loaded alongside this file at the same moment and into the same frozen prompt — it carries the project's institutional memory of past failure modes (one entry per incident, with the load-bearing rule that prevents recurrence). Read both. The contracts compose: anything in `INCIDENTS.md` overrides nothing here, and nothing here waives anything in `INCIDENTS.md`.
 
 ## P0 gates — ordered, blocking, not skippable
 
@@ -66,6 +66,13 @@ Intense rivalry → high red; minimal competition → low green. Reverse this an
 - `P5.5` → `P5` (data validation fail → rewrite) cap = 2.
 - Subagent timeouts: research 600s / photo 300s / QC 180s; first timeout retries at ×1.5; second timeout = phase failure.
 - `P12` has no auto-retry — failures surface to the user with paths and a "which upstream phase to re-run" question.
+
+## Incident loop (load-bearing)
+
+- `P_INCIDENT_PRECHECK` runs **before** `P0_intent`. The orchestrator reads `INCIDENTS.md` end-to-end and writes one `incident_precheck.acknowledged` event to `meta/run.jsonl` per entry.
+- `P5_7_RED_TEAM` and `P10_7_RED_TEAM` run two adversarial agents in parallel (`agents/attackers/red_team_numeric.md`, `red_team_narrative.md`). They are **not** QC peers — QC peers vote, attackers try to falsify. Critical findings loop the writer once (cap = 1 per phase); a second critical halts the run.
+- `P_INCIDENT_POSTCHECK` runs **after** `P12_final_audit` and **before** `P_DB_INDEX`. The orchestrator re-reads `INCIDENTS.md` and confirms each entry's detection signal is green for this run. A flagged post-check blocks DB write — a relapse on a known incident is a release-blocking event.
+- New failure modes are captured by the user via the `/log-incident` slash command (spec at `.claude/commands/log-incident.md`, backend at `tools/io/log_incident.py`). The model drafts an `INCIDENTS.md` entry; the user confirms; only then is it appended. Append-only — never delete or rewrite past entries; supersede with a new entry if needed.
 
 ## What this project does NOT do
 

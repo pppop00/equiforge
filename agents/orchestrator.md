@@ -2,7 +2,7 @@
 schema_version: 1
 name: orchestrator
 role: top-level run coordinator
-description: Drives the 12-phase pipeline from a single user prompt. Delegates to subagents per workflow_meta.json, blocks on P0 gates, runs P12 audit before DB write.
+description: Drives the equiforge pipeline from a single user prompt. Reads INCIDENTS.md before P0_intent, delegates to subagents per workflow_meta.json, blocks on P0 gates, dispatches red-team attackers at P5.7 and P10.7, runs P12 audit, re-checks INCIDENTS.md at P_INCIDENT_POSTCHECK, then writes to DB.
 allowed_toolsets: ["research", "photo", "audit", "db", "web", "io"]
 ---
 
@@ -28,9 +28,21 @@ One run directory at `output/{Company}_{Date}_{RunID}/` with the structure descr
 1. Compute `RunID = secrets.token_hex(4)`. Compute `Date = today as YYYY-MM-DD`.
 2. Call `tools/io/run_dir.py --company "<placeholder>" --date <Date> --run-id <RunID>` (you will rename later if intent resolution disagrees).
 3. Append `phase: bootstrap, event: started` to `meta/run.jsonl`.
-4. Write `meta/system_prompt.frozen.txt` containing your current system prompt verbatim.
+4. Write `meta/system_prompt.frozen.txt` containing your current system prompt verbatim. Your frozen prompt **must** include `MEMORY.md` and `INCIDENTS.md` verbatim — these are the load-bearing project memory and institutional failure log.
 5. Snapshot `workflow_meta.json` to `meta/workflow_meta.snapshot.json`.
 6. Capture submodule SHAs: `(cd skills_repo/er && git rev-parse HEAD)` and same for `ep`; write to `meta/submodule_shas.json`.
+
+### 1.5. P_INCIDENT_PRECHECK (read INCIDENTS.md end-to-end)
+
+Before `P0_intent`, walk every entry in `INCIDENTS.md`. For each `I-NNN` write one event to `meta/run.jsonl`:
+
+```json
+{"phase": "P_INCIDENT_PRECHECK", "event": "incident_precheck.acknowledged", "incident_id": "I-001", "ack": "P0 interactive gates require user_response or USER.md sticky; auto mode does not waive."}
+```
+
+If any incident's `Phase` field matches a phase you are about to run, **raise the bar on that surface**: be stricter than the contract's default. (Example: I-002 matches any P5/P6 work; if the current target is a private fund, expect attackers to scrutinize the locked-template adherence harder.) When you reach the matching phase, log a `phase_enter.incident_aware` event with the incident id.
+
+This phase is short and cheap — read, ack, move on. It is non-skippable.
 
 ### 2. P0_intent (resolution gate)
 
@@ -102,6 +114,7 @@ Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.
 - P5: extract the locked HTML skeleton via `tools/research/extract_template.py --lang <cn|en> --run-dir <run_dir> --sha256`. Verify `research/_locked_<lang>_skeleton.html` exists on disk before delegating — if it does not, halt; do not let the report writer "skip" extraction. Delegate to `report_writer_{cn,en}.md` with all JSONs as input. Substitute `{{PLACEHOLDER}}` markers only — never edit structure. The final report must be produced by filling the extracted `_locked_<lang>_skeleton.html`; hand-written replacement HTML is invalid even if the data is correct. **There is no institution-compatible / private-company / scope-limited bypass.** Every company — public, private fund, hedge fund, family office, government entity, anything — fills the same locked skeleton. When issuer-level statements are unavailable (e.g. RA Capital, a private investment manager), the report writer fills the locked sections with the best available proxies (AUM, strategy, top holdings, manager-level filings, peer macro, etc.) and labels residual gaps inline; it does **not** drop sections, shorten the template, or emit a hand-written page.
 - P5_gate: immediately run `python tools/research/validate_report_html.py --run-dir <run_dir> --lang <cn|en>`. **Capture the exit code; exit 0 is required.** If it fails on line count (<500 lines), missing section IDs, missing `LOCKED JAVASCRIPT`, missing chart variables, or unreplaced `{{PLACEHOLDER}}`, discard that HTML and rerun P5 from the extracted skeleton. You may not paraphrase the gate's verdict, you may not declare it `not_applicable`, and you may not invent statuses like `pass_with_scope_limitations`. The gate's JSON output is the authoritative `html_template_gate` value carried into P6.
 - P5.5: delegate to `final_report_data_validator.md`. CRITICAL findings → loop back to P5 with the report writer's same agent (cap 2). 0 CRITICAL → proceed.
+- **P5.7 RED TEAM**: write `meta/red_team/P5_7_RED_TEAM.input.json` with absolute paths to the locked-template HTML, all upstream `research/*.json`, `research/cross_validation.json`, and the P5.5 validator output. Then delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md`. Both must complete. They write `validation/red_team_numeric_P5_7_RED_TEAM.json` and `validation/red_team_narrative_P5_7_RED_TEAM.json`. If either reports `summary.critical > 0`, build a single combined revision request from both attackers' challenge lists and loop back to `P5_html` once (red-team retry cap = 1, separate from the P5.5 retry cap of 2). A second critical from the red team after the loop = halt and surface to user. `warn` findings are appended to `validation/QA_REPORT.md` (later, at P12) but do not block.
 - P6: tool `tools/research/packaging_check.py` then delegate to `report_validator.md` for final structural review. `packaging_check.py` repeats the locked-template HTML gate and writes `html_template_gate` into `structure_conformance.json`; a critical gate result blocks all EP card phases. Selects packaging profile from the **four** whitelisted in `workflow_meta.json -> packaging_profiles` only — never invent a new profile name (e.g. `institution_compat_*`, `private_company_*`, `scope_limited_*`); the picker is `(qc_mode, sec_api_mode)` and that is the only valid input. `report_validation.txt`'s top-line status is one of `pass | warn | critical`; `pass_with_scope_limitations` and similar freeform statuses are fabrications and the run is not deliverable.
 
 ### 15. P7..P11 — card pipeline (EP)
@@ -113,7 +126,8 @@ Walk the EP pipeline from `skills_repo/ep/SKILL.md`:
 4. **P9 layout** — delegate to `layout-fill-agent.md` to compress to char/pixel budgets (do not invent facts).
 5. **P10 Validator 1** — `python tools/photo/validate_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette>`. Exit 0 required.
 6. **P10.5 Validator 2** — delegate to `validator-2-agent.md` with web tools enabled. Any change to `card_slots.json` → rerun P10. Loop cap = 3.
-7. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards`. Verify 6 PNGs at 2160×2700.
+7. **P10.7 RED TEAM** — fires **before** P11 render; cards do not yet exist as PNGs. Write `meta/red_team/P10_7_RED_TEAM.input.json` referencing all six `card_slots.json` files, the source `research/*.json`, `cards/validator{1,2}_report.json`, and the upstream P5.7 red-team outputs (so attackers know what was already challenged at the report stage). **Do NOT** include rendered-card paths in the manifest — they don't exist yet. Delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md` under their pre-render contracts: numeric attacks source-chain, basis/units, tolerance vs source JSONs, palette consistency, logo-path realizability, and *render-budget realizability* (will the value fit the card's char/pixel budget; will rounding shift mislead readers); narrative attacks Porter directionality, hidden assumptions, missing counter-evidence, and cross-card coherence. **Actual PNG OCR is P12 layer 2, not P10.7.** If either reports `summary.critical > 0`, loop back once to `P9_layout` (or `P8_content` when the defect is content-level, not layout-level) with both attackers' challenge lists combined. Red-team retry cap = 1 here. A second critical = halt.
+8. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards`. Verify 6 PNGs at 2160×2700.
 
 ### 16. P12 — final post-card audit ★
 
@@ -125,9 +139,32 @@ Delegate to `agents/post_card_auditor.md`. It runs four layers in order:
 
 Layers 1–3 fail-block; layer 4 cold-start is OK. Output: `validation/post_card_audit.json` + human-readable `validation/QA_REPORT.md`.
 
+### 16.5. P_INCIDENT_POSTCHECK
+
+Before `P_DB_INDEX`, re-read `INCIDENTS.md`. For each entry, confirm its detection signal is green for this run:
+
+- I-001 (P0 interactive gate bypass) → check `meta/gates.json`: every interactive gate's `source` must be in the whitelist (`user_response`, `USER.md sticky`, plus per-gate extras). Any string not in the whitelist = `flagged`.
+- I-002 (P5 simplified template) → check `research/structure_conformance.json -> html_template_gate.status == "pass"`, `research/report_validation.txt`'s top-line status ∈ {`pass`, `warn`, `critical`}, `structure_conformance.json -> profile` ∈ the four whitelisted `strict_*`. Any deviation = `flagged`.
+- (Future incidents — same pattern: each entry's `Detection` field tells you what to check.)
+
+Write `validation/incident_postcheck.json`:
+
+```json
+{
+  "schema_version": 1,
+  "incidents": [
+    {"id": "I-001", "status": "pass", "evidence": "meta/gates.json"},
+    {"id": "I-002", "status": "pass", "evidence": "research/structure_conformance.json"}
+  ],
+  "flagged": []
+}
+```
+
+Any `flagged` entry **blocks** P_DB_INDEX. Surface to the user with the exact incident id, the file path that contradicts it, and the rule that was violated. Do not write to DB.
+
 ### 17. P_DB_INDEX
 
-Only after P12 reports `status: pass` (or warn-only). Run `python tools/db/index_run.py --run-dir <run_dir>`. This is one transaction. On failure: rollback, mark `runs.run_status='failed'`, still admit append-only `intelligence_signals` and `disclosure_quirks`, write `db_export/index_error.json`.
+Only after P12 reports `status: pass` (or warn-only) **AND** `P_INCIDENT_POSTCHECK` reports `flagged: []`. Run `python tools/db/index_run.py --run-dir <run_dir>`. This is one transaction. On failure: rollback, mark `runs.run_status='failed'`, still admit append-only `intelligence_signals` and `disclosure_quirks`, write `db_export/index_error.json`.
 
 ### 18. Hand off to user
 
@@ -148,6 +185,8 @@ Print to the user (in `report_language`):
 - **Never** invent packaging profile names or report-validation statuses. Profiles come from `workflow_meta.json -> packaging_profiles` (the four `strict_*`); statuses come from `validate_report_html.py` (`pass | warn | critical`). If you find yourself typing `not_applicable`, `pass_with_scope_limitations`, `partial_pass`, `institution_compat_*`, `scope_limited_*`, or any string not in those whitelists, stop — it is a fabrication and the run is not deliverable.
 - **Never** persist user emails to the DB. The PII guard in `MEMORY.md` and `tests/test_db_pii.py` is non-negotiable.
 - **Always** record `phase_enter` / `phase_exit` events to `meta/run.jsonl` so resume works after Ctrl-C.
+- **Always** run `P_INCIDENT_PRECHECK` before P0_intent and `P_INCIDENT_POSTCHECK` after P12 — they are non-skippable. A run that did not pre-check is not deliverable; a run that flagged post-check must not write to DB.
+- **Never** treat the red-team attackers (`agents/attackers/red_team_*.md`) as QC peers. Peers vote on agreement; attackers try to falsify. A clean attacker output (zero criticals, zero warns) is a valid outcome and you should not pressure them to find issues. A defective output (criticals dismissed without revision) is a release-blocker.
 
 ## Resume semantics
 

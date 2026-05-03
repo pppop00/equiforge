@@ -6,12 +6,17 @@ equiforge is delivered as a skill (entry: `SKILL.md`) and maintained as a produc
 
 | Surface | Audience | Source of truth |
 |---|---|---|
-| Skill (auto-triggered) | LLM / Codex / Claude | `SKILL.md` (frontmatter + boot order) |
+| Skill (auto-triggered) | LLM / Codex / Claude | `SKILL.md` (root, canonical) + `.claude/skills/equiforge/SKILL.md` (project mount for auto-discovery) |
 | Workflow contract | Both | `workflow_meta.json` (machine-readable phases) |
 | Project invariants | LLM | `MEMORY.md` (frozen at session start) |
+| Institutional failure log | LLM | `INCIDENTS.md` (frozen at session start, append-only) |
 | User preferences | LLM | `USER.md` (gitignored, sticky) |
 | Runtime brief | Orchestrator subagent | `agents/orchestrator.md` |
+| Adversarial reviewers | Orchestrator subagent | `agents/attackers/red_team_{numeric,narrative}.md` |
 | Reference docs | Lazy-loaded by the model | `references/*.md` |
+| Methodology (the *why*) | Maintainer | `references/harness_methodology.md` |
+| Pre-prompt safety net | Claude Code runtime | `.claude/settings.json` + `.claude/hooks/inject_incidents.py` |
+| Slash commands (user-triggered) | Claude Code runtime | `.claude/commands/*.md` |
 | Maintainer architecture | Humans (you, future you) | `HARNESS.md` (this file) |
 
 The split exists because the skill anatomy spec only allows `name` + `description` in frontmatter, and SKILL bodies should stay under ~500 lines for progressive disclosure. Anything heavier (phase contract, subagent toolset whitelist, run-dir layout, maintenance notes) lives in `references/` and is read on demand.
@@ -20,19 +25,29 @@ The split exists because the skill anatomy spec only allows `name` + `descriptio
 
 ```
 equiforge/
-├── SKILL.md                # ★ skill entry — thin, strict, auto-triggered
+├── SKILL.md                # ★ canonical skill entry — thin, strict, boot order
 ├── HARNESS.md              # this file — harness/architecture/CLI/tests
 ├── MEMORY.md               # project invariants, frozen at session start
+├── INCIDENTS.md            # institutional failure log, frozen at session start, append-only
 ├── USER.md.template        # copy → USER.md (gitignored), sticky preferences
 ├── workflow_meta.json      # machine-readable phase + gate contract
 ├── equiforge.py            # CLI entry (init, status, etc.)
+│
+├── .claude/                # Claude Code project-scoped configuration
+│   ├── skills/equiforge/SKILL.md   # project skill mount (auto-discovery)
+│   ├── settings.json               # hooks block (UserPromptSubmit reminder)
+│   ├── hooks/inject_incidents.py   # injects INCIDENTS reminder on research-style prompts
+│   └── commands/log-incident.md    # /log-incident slash command spec
 │
 ├── agents/                 # equiforge-owned briefs ONLY (no symlinks to upstream)
 │   ├── orchestrator.md
 │   ├── intent_resolver.md
 │   ├── language_gate.md / sec_email_gate.md / palette_gate.md
 │   ├── post_card_auditor.md
-│   └── cross_validator.md
+│   ├── cross_validator.md
+│   └── attackers/
+│       ├── red_team_numeric.md     # numeric/source-chain falsifier
+│       └── red_team_narrative.md   # narrative/Porter-direction falsifier
 │   # ER/EP subagents live at skills_repo/{er,ep}/agents/*.md and are referenced
 │   # by their real paths in workflow_meta.json — never aliased into agents/.
 │
@@ -42,7 +57,8 @@ equiforge/
 │   ├── subagent_toolsets.md
 │   ├── run_artifacts.md
 │   ├── cross_quarter.md
-│   └── maintenance.md
+│   ├── maintenance.md
+│   └── harness_methodology.md      # the *why* behind the layout
 │
 ├── tools/                  # Python CLIs (one tool per concern)
 │   ├── research/   ├── photo/   ├── audit/
@@ -155,6 +171,45 @@ If the upstream ER skill changes the locked HTML template, the upstream maintain
 
 Symlinking back into `agents/` would only be justified if some harness or environment could only read from a single flat directory. Equiforge has no such constraint, so we don't pay the cost.
 
+## Incident loop
+
+`INCIDENTS.md` is the project's append-only failure log. It is loaded into the system prompt at session start (frozen alongside `MEMORY.md` into `meta/system_prompt.frozen.txt`) and bracketed by two non-skippable phases:
+
+- **`P_INCIDENT_PRECHECK`** runs before `P0_intent`. The orchestrator walks each `I-NNN` entry and writes one `incident_precheck.acknowledged` event to `meta/run.jsonl`. If any incident's `Phase` field matches a phase the run will execute, the orchestrator raises the bar on that surface (e.g. private-fund target → expect harder scrutiny on locked-template adherence per I-002).
+- **`P_INCIDENT_POSTCHECK`** runs after `P12_final_audit` and before `P_DB_INDEX`. The orchestrator re-reads `INCIDENTS.md` and confirms each entry's detection signal is green. Output: `validation/incident_postcheck.json`. Any `flagged` entry blocks DB write — a relapse on a known incident is a release-blocking event.
+
+New incidents are captured by the user via `/log-incident <one-line description>`. The slash command spec is at `.claude/commands/log-incident.md`; the backend is `tools/io/log_incident.py --collect`. The flow is:
+
+1. User runs `/log-incident <description>`.
+2. Backend collects digest of latest run (`run.jsonl` tail, `gates.json`, `run.json`, `structure_conformance.json`, `post_card_audit.json`, red-team outputs).
+3. Model drafts a candidate `I-NNN` entry matching existing format.
+4. User confirms before append. Append-only — no rewrites.
+
+See `references/harness_methodology.md` §Principle 3 for the rationale.
+
+## Red-team attackers
+
+`agents/attackers/red_team_numeric.md` and `red_team_narrative.md` are **adversarial** reviewers. They run in parallel at `P5_7_RED_TEAM` (after the data validator clears the report) and at `P10_7_RED_TEAM` (after Validator 2 clears the cards). They are distinct from QC peer agents:
+
+| | QC peers | Red-team attackers |
+|---|---|---|
+| Function | Vote on agreement; weight-average; surface deltas > tolerance | Try to falsify; succeed on finding defects |
+| Output | Score deltas → `qc_audit_trail.json` | Challenge list with severity → `validation/red_team_*.json` |
+| Loop budget | High (P10↔P10.5 cap = 3) | Low (red-team retry cap = 1 per phase) |
+| Where | P2.6, P3.5, P10.5 | P5.7, P10.7 |
+
+Critical findings from either attacker loop the writer once with a combined revision request. A second critical halts the run. Warnings are surfaced in `QA_REPORT.md` but do not block.
+
+## Hooks and slash commands
+
+Project-scoped under `.claude/`. Three independent surfaces:
+
+- **`.claude/skills/equiforge/SKILL.md`** — auto-discovered skill mount. Lets Claude Code find the skill from any folder under this project. Canonical content is at the repo root `SKILL.md`; this file is a thin pointer with the same frontmatter so description-based auto-trigger works. Edit both when you change the description.
+- **`.claude/settings.json` + `.claude/hooks/inject_incidents.py`** — UserPromptSubmit hook. On every prompt, the hook checks for research-style trigger phrases (EN/ZH); if matched, it injects an `INCIDENTS.md` reminder into the model's context as a safety net. No-op for non-research prompts.
+- **`.claude/commands/log-incident.md`** — slash command. User types `/log-incident <description>` to draft a new INCIDENTS entry from the latest run.
+
+The hook is a safety net, not a substitute. The orchestrator must still read `INCIDENTS.md` in `P_INCIDENT_PRECHECK` regardless of whether the hook fired.
+
 ## What this harness deliberately does not do
 
 - **No skill self-improvement / DSPy / GEPA optimizer.** Auditability beats agility. Every numeric in a card is traceable to a source JSON to a frozen system prompt to a submodule SHA.
@@ -166,12 +221,18 @@ Symlinking back into `agents/` would only be justified if some harness or enviro
 
 | You are changing… | Update |
 |---|---|
-| What the skill triggers on | `SKILL.md` description |
+| What the skill triggers on | `SKILL.md` description **and** `.claude/skills/equiforge/SKILL.md` description (keep in sync) |
 | Boot order / commands the model must run | `SKILL.md` body |
 | What a phase produces / its tool | `workflow_meta.json` + `references/phase_contract.md` |
 | Per-gate rules (whitelist, sticky source) | `references/p0_gates.md` |
 | Subagent toolset scope | `references/subagent_toolsets.md` |
 | Numerical tolerances | `MEMORY.md` AND `tools/audit/reconcile_numbers.py` (both, every time) |
+| Adding a new failure rule that traces to a real incident | `INCIDENTS.md` via `/log-incident` (never edit by hand) |
+| Adding a new permanent invariant unrelated to an incident | `MEMORY.md` + a test under `tests/` that enforces it |
+| Adding a new red-team attack surface | `agents/attackers/red_team_*.md` (extend the existing two; don't create a third unless the surface is genuinely orthogonal) |
+| Hook trigger phrases (when the UserPromptSubmit reminder fires) | `.claude/hooks/inject_incidents.py` `TRIGGER_PATTERNS` |
+| Slash commands | `.claude/commands/<name>.md` (spec) + `tools/io/<name>.py` (backend, if needed) |
 | DB schema | new `db/schema/00X_*.sql` + bump `PRAGMA user_version` + run migration tests |
 | Locked HTML template | upstream `skills_repo/er` only — equiforge bumps the submodule |
 | Architecture / CLI / dev workflow | this file (`HARNESS.md`) |
+| Methodology / the *why* behind the layout | `references/harness_methodology.md` |
