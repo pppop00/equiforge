@@ -37,7 +37,7 @@ The result is an agent harness that **shows up for work as a veteran every singl
 
 ---
 
-## What's distinctive (特点)
+## What's distinctive
 
 - **Cross-session institutional memory, frozen not retrieved.** `INCIDENTS.md` is loaded verbatim into every session's system prompt at boot — alongside `MEMORY.md`. The agent cannot fail to look up a rule, because the rule is already in front of it.
 - **Curated, not auto-logged.** New entries to `INCIDENTS.md` come only through the `/log-incident` slash command, with the human confirming before append. This is the throttle that prevents memory inflation; auto-logging projects collapse into noise within weeks.
