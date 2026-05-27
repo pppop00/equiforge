@@ -303,18 +303,20 @@ CREATE INDEX IF NOT EXISTS idx_findings_run ON validation_findings(run_id);
 -- ─────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS card_slots (
-    ticker             TEXT NOT NULL,
-    run_id             TEXT NOT NULL REFERENCES runs(run_id),
-    card_slots_json    TEXT NOT NULL,
-    cover_focus        TEXT,
-    brand_statement    TEXT,
-    social_post        TEXT,
-    card1_png_path     TEXT,
-    card2_png_path     TEXT,
-    card3_png_path     TEXT,
-    card4_png_path     TEXT,
-    card5_png_path     TEXT,
-    card6_png_path     TEXT,
+    ticker                TEXT NOT NULL,
+    run_id                TEXT NOT NULL REFERENCES runs(run_id),
+    card_slots_json       TEXT NOT NULL,
+    cover_focus           TEXT,
+    brand_statement       TEXT,
+    social_post           TEXT,
+    card1_png_path        TEXT,
+    card2_png_path        TEXT,
+    card3_png_path        TEXT,
+    card4_png_path        TEXT,
+    card5_png_path        TEXT,
+    card6_png_path        TEXT,
+    cfa_lens_formula      TEXT,
+    cfa_lens_calculation  TEXT,
     PRIMARY KEY (ticker, run_id)
 );
 

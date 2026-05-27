@@ -13,7 +13,7 @@ You are the final paying-customer gate. Your job: prove the 4 PNGs we are about 
 ## Inputs
 
 - `output/{Run}/cards/{stem}.card_slots.json` — final slot copy after Validator 1 + 2.
-- `output/{Run}/cards/01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_cfa_lens.png` — the 4 rendered PNGs at 2160×2700.
+- `output/{Run}/cards/01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_cfa_lens.png` — the 4 rendered PNGs at 2160×2700. `04_cfa_lens.png` is the merged single-panel CFA card (v3); audit it for visible `cfa_lens.formula` text and a visible `cfa_lens.company_calculation` block (digits should OCR through layer 2; the deleted-in-v3 takeaway text must **not** appear).
 - `output/{Run}/research/financial_data.json`, `financial_analysis.json`, `prediction_waterfall.json`, `porter_analysis.json` — research source of truth.
 - `db/equity_kb.sqlite` — historical and peer data (read-only via `tools/db/queries.py`).
 - `meta/run.json` — ticker, period, palette, etc.

@@ -29,7 +29,10 @@ CARD_FILE_TO_INDEX = {
     "04_cfa_lens.png": 4,
 }
 
-# Slot keys → which card index they appear on (1-indexed)
+# Slot keys → which card index they appear on (1-indexed).
+# `cfa_lens` is a nested dict; `_walk_numerics` recurses into it so the
+# dotted sub-keys are documentary only (and asserted by
+# tests/test_schema_v3_slot_keys.py to lock the v3 contract).
 SLOT_TO_CARD = {
     "intro_sentence": 1,
     "company_focus_paragraph": 1,
@@ -42,6 +45,8 @@ SLOT_TO_CARD = {
     "recent_financial_highlights": 3,
     "revenue_explainer_points": 3,
     "cfa_lens": 4,
+    "cfa_lens.formula": 4,
+    "cfa_lens.company_calculation": 4,
 }
 
 # Slot keys whose missing numerics fail-block (paying-customer-critical)

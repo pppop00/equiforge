@@ -132,7 +132,7 @@ Delegated to subagents under `skills_repo/er/agents/`. The orchestrator's job is
 ## P7–P10.7 — card pipeline + adversarial review (EP)
 
 - **P7 logo**: hard rule — create the per-run `cards/` directory **first**, save `logo_official.png` into it, set `logo_asset_path` to that absolute path, only then proceed. Order matters; see `MEMORY.md`.
-- **P8 content**: produces `cards/{stem}.card_slots.json` per the schema v2 keys (`cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc`, `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens`, plus `logo_asset_path` set at P7).
+- **P8 content**: produces `cards/{stem}.card_slots.json` per the schema v3 keys (`cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc`, `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens`, plus `logo_asset_path` set at P7). The `cfa_lens` block in v3 must include `formula` (real formula with `=`) and `company_calculation` (1-3 lines, ≥1 digit); the pre-v3 `cfa_lens.takeaway` slot is gone.
 - **P8.5 hardcode audit**: every sentence has a company-specific anchor; no boilerplate.
 - **P9 layout**: compress to char/pixel budgets — do not invent facts.
 - **P10 Validator 1**: `python tools/photo/validate_cards.py`. Exit 0 required.

@@ -31,6 +31,8 @@ PRIORITY_PATHS = [
     "card_slots.recent_financial_highlights",
     "card_slots.revenue_explainer_points",
     "card_slots.five_year_arc",
+    "card_slots.cfa_lens.formula",
+    "card_slots.cfa_lens.company_calculation",
 ]
 
 

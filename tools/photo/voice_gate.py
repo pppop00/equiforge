@@ -79,7 +79,8 @@ def _worker_notes_sidecar(slots_path: Path) -> Path:
 def _classify_issue(line: str) -> dict:
     """Turn EP's free-form issue string into a structured dict.
 
-    EP emits lines like `worker_notes.cfa_lens.company_application: no parseable number`.
+    EP emits lines like `worker_notes.cfa_lens.company_calculation: no parseable number`
+    (the v3 authority slot — see EP's `AUTHORITY_SLOTS = ("company_calculation",)`).
     We tokenise by the first ':' so callers can pivot by (slot, field).
     """
     if ":" in line:
