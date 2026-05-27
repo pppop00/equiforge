@@ -7,7 +7,7 @@ after the Card-4 redesign:
   - `cfa_lens.formula` and `cfa_lens.company_calculation` are the new hard-rule
     Card-4 slots
   - `cfa_lens.company_calculation` is the new analyst-authority slot (was
-    `cfa_lens.different_angle_insight` in v2)
+    previously `cfa_lens.different_angle_insight`)
   - the DB schema gained two columns: `cfa_lens_formula`, `cfa_lens_calculation`
 
 Static-text / source-text checks only — they intentionally do not invoke EP.
@@ -15,6 +15,7 @@ Static-text / source-text checks only — they intentionally do not invoke EP.
 from __future__ import annotations
 
 import importlib.util
+import sqlite3
 from pathlib import Path
 
 
@@ -41,6 +42,13 @@ def test_card4_formula_in_priority_paths() -> None:
         "tools/audit/web_third_check.PRIORITY_PATHS is missing "
         "'card_slots.cfa_lens.company_calculation' — the v3 authority slot "
         "will skip layer-3 web re-verification."
+    )
+    assert paths.index("card_slots.cfa_lens.company_calculation") < paths.index(
+        "card_slots.metrics_row"
+    ), (
+        "card_slots.cfa_lens.company_calculation must be ahead of the generic "
+        "metrics row; otherwise the default top-n=3 web audit can fill up before "
+        "it reaches the v3 authority calculation."
     )
 
 
@@ -91,16 +99,25 @@ def test_card4_takeaway_slot_absent_from_db_writes() -> None:
     )
 
 
-def test_card4_new_db_columns_declared() -> None:
-    schema_src = (PROJECT_ROOT / "db" / "schema" / "001_init.sql").read_text(
-        encoding="utf-8"
+def test_card4_new_db_columns_after_migrations(tmp_path: Path) -> None:
+    migrate = _load_module("migrate_for_card4_test", "tools/db/migrate.py")
+    db = tmp_path / "card4_v3.sqlite"
+    migrate.apply_migrations(db)
+
+    conn = sqlite3.connect(db)
+    try:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(card_slots)").fetchall()
+        }
+    finally:
+        conn.close()
+
+    assert "cfa_lens_formula" in columns, (
+        "migrated card_slots table is missing cfa_lens_formula. "
+        "The v3 Card-4 redesign needs a dedicated column for cfa_lens.formula."
     )
-    assert "cfa_lens_formula" in schema_src, (
-        "db/schema/001_init.sql is missing the cfa_lens_formula column. "
-        "The v3 Card-4 redesign added a dedicated column for cfa_lens.formula."
-    )
-    assert "cfa_lens_calculation" in schema_src, (
-        "db/schema/001_init.sql is missing the cfa_lens_calculation column. "
-        "The v3 Card-4 redesign added a dedicated column for "
+    assert "cfa_lens_calculation" in columns, (
+        "migrated card_slots table is missing cfa_lens_calculation. "
+        "The v3 Card-4 redesign needs a dedicated column for "
         "cfa_lens.company_calculation."
     )

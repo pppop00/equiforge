@@ -29,19 +29,18 @@ If you add a new palette:
 ## DB schema changes
 
 - Each schema change is a new file `db/schema/00X_*.sql`.
-- Bump `PRAGMA user_version` inside the migration.
+- The migration runner advances `PRAGMA user_version` after each successful file.
 - **Never destroy** existing columns or tables — additive only. Rename via `ALTER TABLE ... ADD COLUMN` + dual-write window.
 - Run `pytest tests/test_db_migrations.py` to verify the migration applies cleanly to a cold DB and an existing one.
 - `tests/test_db_pii.py` is a regression: any TEXT column matching the email regex after a fixture run = test fails = release blocked.
 
-### `card_slots` evolution (v2 → v3)
+### `card_slots` Card 4 v3
 
-- v2 (post 4-card cutover): the deleted `brand_statement` column was stretch-mapped to `cfa_lens.takeaway` at write time. Rows written by v2-era code carry the Card-4 takeaway sentence in `brand_statement`.
-- v3 (Card-4 redesign — `cfa_lens.takeaway` removed; merged single-panel layout): `brand_statement` is retired back to NULL for new rows. Two new additive columns hold the v3 payload:
+- Card 4 v3 removes `cfa_lens.takeaway`, uses a merged single-panel layout, and keeps `brand_statement` NULL for new rows. Two additive columns hold the v3 payload:
   - `cfa_lens_formula TEXT` ← `cfa_lens.formula` verbatim.
   - `cfa_lens_calculation TEXT` ← `cfa_lens.company_calculation` (list) joined with `\n`.
 
-  Per the additive-only DB policy, no columns are renamed or dropped — query writers reading `brand_statement` on v2-era rows still get the takeaway sentence; v3+ rows return NULL there. The write-site in `tools/db/index_run.py` carries one inline comment explaining the v2/v3 evolution so future query writers can decode old vs new rows.
+  Per the additive-only DB policy, no columns are renamed or dropped. Query writers should treat `brand_statement` as a legacy deleted-slot column; v3+ rows return NULL there.
 
 ## Card slot schema
 

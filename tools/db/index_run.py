@@ -23,6 +23,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from tools.db import migrate  # noqa: E402
+
 DEFAULT_DB = PROJECT_ROOT / "db" / "equity_kb.sqlite"
 
 EMAIL_IN_PARENS_RE = re.compile(r"\([^)]*@[^)]*\)")
@@ -220,6 +225,7 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
 
     # Open DB and apply migrations defensively (idempotent)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    migrate.apply_migrations(db_path)
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
 
@@ -595,27 +601,9 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
                 for n in range(1, 5):
                     candidates = list(cards_dir.glob(f"{n:02d}_*.png"))
                     paths_by_n[n] = str(candidates[0]) if candidates else None
-                # Card-slot schema evolution (additive-only DB policy, see
-                # references/maintenance.md). The card pack is 4 PNGs, so card5_png_path /
-                # card6_png_path are NULL.
-                #
-                #   v2 (post 4-card cutover, pre Card-4 redesign): the deleted-slot columns
-                #         were repurposed without renaming:
-                #             - brand_statement <- cfa_lens.takeaway (single conviction
-                #               sentence; closest semantic analogue to the deleted slot)
-                #             - social_post     <- NULL
-                #   v3 (Card-4 redesign): the three cream panels merged into one and the
-                #         takeaway / different_angle_insight authority moves to
-                #         cfa_lens.company_calculation (with cfa_lens.formula alongside).
-                #         brand_statement now goes back to NULL — the v2 stretch is
-                #         retired. Two new dedicated columns hold the v3 payload:
-                #             - cfa_lens_formula      <- cfa_lens.formula
-                #             - cfa_lens_calculation  <- cfa_lens.company_calculation,
-                #                                        joined with "\n" since the slot
-                #                                        is a 1-3 element list
-                #
-                # Query writers reading brand_statement: rows written by v2-era code carry
-                # cfa_lens.takeaway there; v3+ rows leave it NULL.
+                # Card 4 v3 stores formula/calculation in dedicated columns.
+                # The pack is now 4 PNGs, so card5/card6 and legacy deleted-slot
+                # columns remain NULL for new rows.
                 cfa_lens = cs.get("cfa_lens") if isinstance(cs.get("cfa_lens"), dict) else {}
                 cfa_formula = cfa_lens.get("formula") if isinstance(cfa_lens, dict) else None
                 cfa_calc_raw = cfa_lens.get("company_calculation") if isinstance(cfa_lens, dict) else None

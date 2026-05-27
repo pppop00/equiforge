@@ -21,6 +21,11 @@ DEFAULT_DB = PROJECT_ROOT / "db" / "equity_kb.sqlite"
 SCHEMA_DIR = PROJECT_ROOT / "db" / "schema"
 
 MIGRATION_RE = re.compile(r"^(\d{3})_.*\.sql$")
+ADD_COLUMN_RE = re.compile(
+    r"^\s*ALTER\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s+ADD\s+COLUMN\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s+(.+?)\s*;?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def discover_migrations() -> list[tuple[int, Path]]:
@@ -51,7 +56,8 @@ def apply_migrations(db_path: Path, dry_run: bool = False) -> dict:
         for version, path in pending:
             sql = path.read_text(encoding="utf-8")
             try:
-                conn.executescript(sql)
+                if not _apply_add_column_migration(conn, sql):
+                    conn.executescript(sql)
                 conn.execute(
                     "INSERT INTO schema_meta (schema_version, applied_at, notes) VALUES (?, ?, ?)",
                     (version, _now_iso(), path.name),
@@ -70,6 +76,41 @@ def apply_migrations(db_path: Path, dry_run: bool = False) -> dict:
         }
     finally:
         conn.close()
+
+
+def _apply_add_column_migration(conn: sqlite3.Connection, sql: str) -> bool:
+    """Apply simple additive-column migrations idempotently.
+
+    SQLite has no `ALTER TABLE ADD COLUMN IF NOT EXISTS`; this keeps additive
+    schema migrations safe when a short-lived bad migration already created a
+    column but did not advance `PRAGMA user_version`.
+    """
+    statements = _sql_statements_without_line_comments(sql)
+    if not statements:
+        return False
+
+    parsed: list[tuple[str, str, str]] = []
+    for statement in statements:
+        m = ADD_COLUMN_RE.match(statement)
+        if not m:
+            return False
+        parsed.append((m.group(1), m.group(2), m.group(3)))
+
+    for table, column, definition in parsed:
+        columns = {
+            row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column in columns:
+            continue
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    return True
+
+
+def _sql_statements_without_line_comments(sql: str) -> list[str]:
+    body = "\n".join(
+        line for line in sql.splitlines() if not line.lstrip().startswith("--")
+    )
+    return [part.strip() for part in body.split(";") if part.strip()]
 
 
 def _now_iso() -> str:

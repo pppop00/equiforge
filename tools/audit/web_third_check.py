@@ -26,13 +26,13 @@ from _numerics import extract_numerics  # noqa: E402
 PRIORITY_PATHS = [
     "card_slots.intro_sentence",
     "card_slots.company_focus_paragraph",
+    "card_slots.cfa_lens.company_calculation",
+    "card_slots.cfa_lens.formula",
     "card_slots.metrics_row",
     "card_slots.industry_paragraph",
     "card_slots.recent_financial_highlights",
     "card_slots.revenue_explainer_points",
     "card_slots.five_year_arc",
-    "card_slots.cfa_lens.formula",
-    "card_slots.cfa_lens.company_calculation",
 ]
 
 

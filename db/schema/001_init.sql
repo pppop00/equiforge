@@ -315,8 +315,6 @@ CREATE TABLE IF NOT EXISTS card_slots (
     card4_png_path        TEXT,
     card5_png_path        TEXT,
     card6_png_path        TEXT,
-    cfa_lens_formula      TEXT,
-    cfa_lens_calculation  TEXT,
     PRIMARY KEY (ticker, run_id)
 );
 
