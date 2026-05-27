@@ -91,7 +91,7 @@ def test_fail_when_ocr_misses_key(tmp_path: Path) -> None:
         tmp_path,
         recon_rows=[],
         ocr_summary={"engine": "paddleocr", "status": "fail",
-                       "key_misses": [{"card": 3, "slot": "intro_sentence", "value": 56.3, "context": "毛利率"}],
+                       "key_misses": [{"card": 1, "slot": "intro_sentence", "value": 56.3, "context": "毛利率"}],
                        "decorative_misses": []},
         web_envelope={"status": "pass", "targets": []},
         db_cross={"status": "pass", "checks": []},

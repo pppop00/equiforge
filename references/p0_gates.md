@@ -8,7 +8,7 @@ description: Per-gate rules for the four P0 gates (intent, language, SEC email, 
 The four P0 gates are all **blocking** and **not skippable**, but they split into two kinds:
 
 - **Resolution gate** — `P0_intent`. Resolves identity from the prompt. Auto-resolution is allowed (and expected) when the prompt is unambiguous; user is asked only on ambiguity.
-- **Interactive gates** — `P0_lang`, `P0_sec_email`, `P0_palette`. Cannot be inferred from the prompt. Each must be satisfied by either a real user reply or a sticky value in `USER.md`. Auto-mode does not waive them. The cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across 6 cards) is a full re-run.
+- **Interactive gates** — `P0_lang`, `P0_sec_email`, `P0_palette`. Cannot be inferred from the prompt. Each must be satisfied by either a real user reply or a sticky value in `USER.md`. Auto-mode does not waive them. The cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across the card pack) is a full re-run.
 
 Each gate's answer is recorded in `meta/gates.json` with a `source` field. Only the values listed below are allowed per gate; anything else is a P0 violation and will be caught in `meta/gates.json` review.
 
@@ -44,7 +44,7 @@ Each gate's answer is recorded in `meta/gates.json` with a `source` field. Only 
 - **Goal**: `palette ∈ {macaron, default, b, c}`.
 - **Agent**: `agents/palette_gate.md`.
 - **Sticky source**: `USER.md:default_palette`.
-- **Why it blocks**: the palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header-colour drift across the 6-card pack. All six cards in one run must use the same `--palette`.
+- **Why it blocks**: the palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header-colour drift across the 4-card pack. All four cards in one run must use the same `--palette`.
 - **Allowed `source` values**: `user_response`, `USER.md sticky`.
 
 ## What never counts as a valid source (interactive gates only)

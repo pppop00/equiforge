@@ -35,10 +35,10 @@ Every numeric in the draft. For each value, ask the four questions below, in ord
 
 ## What you must also attack at P10.7 (cards only — pre-render)
 
-**Important:** P10.7 fires **before** P11 render. The six PNG cards do **not** exist yet at this phase. You are inspecting `card_slots.json` and the layout-fill outputs only. Actual PNG OCR happens at P12 layer 2 (`tools/audit/ocr_cards.py`); do not duplicate it here.
+**Important:** P10.7 fires **before** P11 render. The four PNG cards do **not** exist yet at this phase. You are inspecting `card_slots.json` and the layout-fill outputs only. Actual PNG OCR happens at P12 layer 2 (`tools/audit/ocr_cards.py`); do not duplicate it here.
 
 - **Render-budget realizability** (not OCR). The value as written into `card_slots.json` will be rendered at P11 into a fixed pixel and character budget per slot (see `skills_repo/ep/scripts/validate_cards.py` for the budgets). Will it fit without truncation? Will the layout-fill rounding (e.g. `$1,234.56M` → `$1.2B`) shift reader meaning even though it's within tolerance? Reader-ambiguous rounding = `severity: warn`; values that exceed the slot budget = `severity: critical` (the renderer will silently truncate at P11).
-- **Palette consistency.** Do all six cards declare the same palette in `card_slots.json`? Mismatch = **defective**.
+- **Palette consistency.** The palette is a single CLI arg passed to every card render in this run — `card_slots.json` itself does not carry a per-card palette field. Flag any drift between the palette declared in `meta/gates.json -> P0_palette.value` and the palette the renderer will be invoked with. Mismatch = **defective**.
 - **Logo path realizability.** Is `logo_asset_path` an absolute path that resolves under the run dir and points to a file ≥840 px wide? (Use `tools/photo/check_logo.py` if available, else stat + image probe.) The render at P11 will fail-soft on a missing logo and the failure may not surface until P12.
 
 ## How to attack — process

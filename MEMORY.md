@@ -42,10 +42,10 @@ These four rules all stem from the same failure family (`INCIDENTS.md` I-002): t
 ## Hard rules
 
 - **Logo save order.** P7 must (a) create the per-run output folder first, (b) save `logo_official.png` directly into it, (c) set `logo_asset_path` to the absolute path inside that folder, (d) only then proceed. Final asset must be a transparent PNG/WEBP — no opaque white canvas (`INCIDENTS.md` I-006).
-- **Palette consistency.** All six cards in one run must use the same `--palette`. The palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header colour drift.
+- **Palette consistency.** All four cards in one run must use the same `--palette`. The palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header colour drift.
 - **No fallback copy generation in EP.** `card_slots.json` must be complete before render; missing keys abort at load time.
 - **No user emails persisted to the DB.** SEC EDGAR email is a runtime arg only. Live in `meta/run.json` as `sec_email` / `sec_user_agent`; never in any DB TEXT column. `public_user_agent` (PII-free) is the only User-Agent for non-SEC fetches (`INCIDENTS.md` I-003). Regression: `tests/test_db_pii.py`.
-- **Submodules are SHA-pinned, not editable in-place.** `skills_repo/er/` and `skills_repo/ep/` are pinned via `.gitmodules`. Behaviour changes there happen in the sibling clones (`../Equity Research Skill/`, `../Equity Photo Skill/`); you bump the SHA here only when ready.
+- **Submodules are SHA-pinned, not editable in-place.** `skills_repo/er/` and `skills_repo/ep/` are pinned via `.gitmodules`. Runtime wrappers must resolve only those submodule paths, never sibling working-copy fallbacks. Behaviour changes to standalone ER/EP happen in their own repos; Anamnesis picks them up only through a deliberate submodule SHA bump.
 - **Numerical reconciliation tolerance** (P12 layer 1):
   - margins / ratios / percentage points: ±0.5pp
   - currency amounts: ±0.5% relative
@@ -76,14 +76,16 @@ Threat / pressure scale (not attractiveness):
 
 Intense rivalry → high red; minimal competition → low green. Reverse this and Validator and reviewers will catch it.
 
-## Cards 1–5 voice governed by analyst-content gate (plan v3)
+## Cards 1–4 voice governed by analyst-content gate (plan v3)
 
-Card 1–5 prose (cover / industry-vs-consensus / one-number+comp / catalyst+falsifier / PM-soundbite) is governed by `validate_card1_5_analytical_content()` in `skills_repo/ep/scripts/generate_social_cards.py`, called at `P10_6_voice_gate`. The writer must emit two parallel JSONs:
+The card pack is **4 cards** (cover / Porter / 5-year + recent financials / CFA lens). Card 1–4 prose is governed by `validate_card1_4_analytical_content()` in `skills_repo/ep/scripts/generate_social_cards.py`, called at `P10_6_voice_gate`. The writer must emit two parallel JSONs:
 
-- `<Company>_Research_<lang>.card_slots.json` (rendered prose, existing schema)
-- `<Company>_Research_<lang>.card_slots_worker_notes.json` (hidden analyst fields per Card 1-5 slot: `data_anchor` with number + comp, `variant_view` ≥15 chars, plus ≥1 of `falsifier` / `primary_quote` / `catalyst_with_date`; authority slots `brand_statement` / `judgement_paragraph` require `primary_quote`)
+- `<Company>_Research_<lang>.card_slots.json` (rendered prose, schema v2: `logo_asset_path`, `cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc` (nested with `narrative` + `inflection_points`), `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens` (nested with `concept_key`, `concept_name_cn`, `concept_intro`, `company_application`, `different_angle_insight`, `takeaway`, `cfa_progress_source`))
+- `<Company>_Research_<lang>.card_slots_worker_notes.json` (hidden analyst fields per Card 1-4 slot: `data_anchor` with number + comp, `variant_view` ≥15 chars, plus ≥1 of `falsifier` / `primary_quote` / `catalyst_with_date`; Card 4's authority slot `cfa_lens.company_application` requires `primary_quote`)
 
-Backstop banned phrases on Cards 1-5 only (Card 6 keeps 贴吧 tone): `说白了`, `X 不是 Y 而是 Z` template, `已不是核心叙事 / 已不重要 / 体现了 / 总而言之 / 综上 / 简单来说`, "关注 X 每天学一个公司" subscription-bait CTA.
+Backstop banned phrases on Cards 1-4: `说白了`, `X 不是 Y 而是 Z` template, `已不是核心叙事 / 已不重要 / 体现了 / 总而言之 / 综上 / 简单来说`, "关注 X 每天学一个公司" subscription-bait CTA.
+
+`cfa_lens.concept_key` is selected by EP's CFA-concept selector from the `cfa_progress` string passed by Anamnesis (read from `USER.md:cfa_progress` and propagated to EP via `--cfa-progress` on `validate_cards.py` and `generate_social_cards.py`). When `USER.md:cfa_progress` is unset, EP falls back to its own default.
 
 `P10_6_voice_gate` blocks `P10_7_RED_TEAM`, `P11_render`, and `P_DB_INDEX` on failure. Red-team narrative §6.a attacks the substance of what passes the deterministic gate.
 

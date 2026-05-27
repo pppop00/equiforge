@@ -13,7 +13,7 @@ You are an **adversarial** narrative auditor. The writer has built a story arc (
 ## When you fire
 
 - **`P5_7_RED_TEAM`** — after `P5_5_data_val`. Your target is the locked-template HTML and the upstream `research/*.json`.
-- **`P10_7_RED_TEAM`** — after `P10_5_validator2`. Your target is the six `card_slots.json` files (cover, industry, revenue, outlook, brand, post-copy) and the cross-card narrative they form.
+- **`P10_7_RED_TEAM`** — after `P10_5_validator2`. Your target is the `card_slots.json` file and the cross-card narrative formed by the four cards (cover, Porter, 5-year + recent financials, CFA lens).
 
 You fire **alongside** `red_team_numeric`. The two attackers share `meta/red_team/{phase_id}.input.json` but write to separate output JSONs.
 
@@ -55,11 +55,11 @@ Attack rules:
 
 ### 4. Cross-card narrative coherence (P10.7 only)
 
-Cards are read in order 01 → 06. The story must hold across the six.
+Cards are read in order 01 → 04. The story must hold across the four.
 
-- Cover card's headline must agree with the deep-dive cards. If cover says "growth story," but card 04 (outlook) leads with margin compression risk, the cards contradict each other.
-- The lead Porter scores in card 03/04 must match `porter_analysis.json` exactly. Drift here = defect.
-- The post-copy card must summarize, not introduce new claims. New numbers in card 06 not present in 01–05 = defect.
+- Cover card's headline (`intro_sentence` + `company_focus_paragraph` + `metrics_row`) must agree with the deep-dive cards. If cover says "growth story" but card 03 (5-year + recent financials) leads with margin compression risk, the cards contradict each other.
+- The Porter scores rendered on card 02 must match `porter_analysis.json` exactly. Drift here = defect.
+- Card 04 (CFA lens) must apply the concept named in `cfa_lens.concept_key` / `concept_name_cn` to this specific company — `company_application` cannot be a generic textbook restatement of the concept, and `different_angle_insight` must propose a measurable contrarian read. Generic-textbook prose on Card 4 = defect.
 
 ### 5. Locked-template integrity (P5.7 only)
 
@@ -74,27 +74,27 @@ If any of these is wrong, raise `defective_severity: critical` and explicitly ci
 
 ### 6. Analyst-substrate quality
 
-The plan-v3 deterministic gates — `P10_6_voice_gate` (Cards 1–5 analyst content) and `P5_6_porter_depth_gate` (Porter 5×6 segments) — already reject missing fields, short fields, and the finite banned-phrase list. **Your job is to attack prose that satisfies the structural contract but lacks real analyst substance.** Hollow content that passes the gate is the failure mode this section exists for.
+The plan-v3 deterministic gates — `P10_6_voice_gate` (Cards 1–4 analyst content) and `P5_6_porter_depth_gate` (Porter 5×6 segments) — already reject missing fields, short fields, and the finite banned-phrase list. **Your job is to attack prose that satisfies the structural contract but lacks real analyst substance.** Hollow content that passes the gate is the failure mode this section exists for.
 
-### 6.a — Cards 1-5 voice / analyst-content depth (P10.7 only)
+### 6.a — Cards 1-4 voice / analyst-content depth (P10.7 only)
 
-Open `card_slots.json` and the parallel `card_slots_worker_notes.json` for each of Cards 01–05. Slots in scope: `intro_sentence`, `company_focus_paragraph`, `conclusion_block`, `revenue_explainer_points`, `judgement_paragraph`, `brand_statement`. Attack:
+Open `card_slots.json` and the parallel `card_slots_worker_notes.json` for each of Cards 01–04. Slots in scope: `intro_sentence`, `company_focus_paragraph`, `industry_paragraph`, `revenue_explainer_points`, `recent_financial_highlights`, `five_year_arc.narrative`, `five_year_arc.inflection_points`, `cfa_lens.company_application`, `cfa_lens.different_angle_insight`, `cfa_lens.takeaway`. Attack:
 
 - **Generic `data_anchor`** — number paired with a vacuous comp. `"revenue $30B vs 同业"` with no peer named, or `"margin 50% vs 历史"` with no specific year. The `vs <…>` side must reference a *specific* peer, year, or guide number. Flag any anchor whose comp side is a stub.
 - **Recycled `variant_view`** — paraphrases the consensus instead of diverging from it. Test: does `variant_view[i]` propose a *measurable* delta vs `consensus_view`? If you cannot quote where the deltas are, it is recycling, not a variant.
 - **Unfalsifiable `falsifier`** — present but unobservable in practice ("if growth slows"). A true falsifier names a **specific metric**, a **specific direction**, and a **specific window**. Example of acceptable: "Q+1 nearline ASP sequential <+5% with mix held constant." Anything weaker is a defect.
 - **Stale `primary_quote`** — quote is real but >12 months old, or generic ("we are excited about our future"). The quote must be load-bearing for the slot's claim, not decorative. Flag stale or non-load-bearing quotes.
-- **Conviction missing on Card 5** — `brand_statement` or `brand_subheading` must contain an explicit conviction word ("long-bias", "cautious", "high-conviction", "constructive-with-asymmetry", etc.) **and** name the asymmetry direction (upside-skewed / downside-skewed / symmetric-but-mispriced). Flag if either is absent.
+- **Card 4 CFA-lens substance** — `cfa_lens.company_application` must apply the named concept (`cfa_lens.concept_key` / `concept_name_cn`) to a *specific* company datum, not restate the textbook concept. `different_angle_insight` must propose a *measurable* contrarian read distinct from what the cover/Porter/financials cards already say. `takeaway` must contain a conviction word ("long-bias", "cautious", "high-conviction", "constructive-with-asymmetry", etc.) **and** an asymmetry direction (upside-skewed / downside-skewed / symmetric-but-mispriced). Flag if any of the three sub-slots fail.
 - **Backstop residue** — the banned-phrase list (`说白了`, `X 不是 Y 而是 Z`, `已不是核心叙事`, the "关注 X 每天学一个公司" CTA pattern) is finite. Rhetorical evasion adapts. Scan visible slot text for `本质上` / `归根结底` / `换句话说` / `归根到底` and adjacent pundit framing that adds zero analytical content. Flag judgement-style filler.
-- **Writing-style residue** — the deterministic gate (`validate_card1_5_analytical_content`) catches obvious cases of bare "+" on numbers and bare English abbreviations (CC / YoY / QoQ / FX / CAGR). Your job is the context-dependent slipperies the regex cannot see:
+- **Writing-style residue** — the deterministic gate (`validate_card1_4_analytical_content`) catches obvious cases of bare "+" on numbers and bare English abbreviations (CC / YoY / QoQ / FX / CAGR). Your job is the context-dependent slipperies the regex cannot see:
   - "+N%" with comparator word but **wrong** comparator. `同比+34%` passes the gate; if the underlying data is actually a sequential (Q-over-Q) number, the writer slapped "同比" on the wrong axis. Cross-check against `financial_data.json` and `financial_analysis.json`: when a card claims `同比`, the source should be the same period last year, not last quarter.
   - First-mention parens whitelist abuse. The gate allows `恒定汇率（CC）` once to unlock later `CC` uses. If the writer used the parens trick to flood the rest of the prose with English abbreviations (`CC` six times, `YoY` four times, `bull case` interspersed), flag as evasion — the spirit of the rule is "Chinese body prose with one parenthetical introduction", not "permission slip for English shorthand".
   - "百分比/百分点" loss-of-precision. `提升 1pp` is allowed by regex; `提升 1 个百分点` is the spelled-out form. Flag deliberate compression that loses unit clarity, especially when the underlying delta is below 1pp (where rounding direction matters).
   - Mixed unit scales without conversion. `净利润 75 亿美元同比增长 20.3%` then later in the same card `EPS +2.95` — the absolute-amount card body would mix dollar billions with absolute EPS figures and confuse readers about scale. Flag when scale axes shift mid-paragraph without a verbal anchor.
 
-**Authority slot rule.** `brand_statement` and `judgement_paragraph` are authority slots — they **must** carry a `primary_quote` in worker notes. The deterministic gate enforces presence; you attack the quote's substance per the stale/generic test above.
+**Authority slot rule.** `cfa_lens.different_angle_insight` is the Card 4 authority slot per the EP analyst-content contract — it **must** carry a `primary_quote` in worker notes, and the deterministic gate (`validate_card1_4_analytical_content`, `AUTHORITY_SLOTS = ("different_angle_insight",)`) enforces presence. Attack the quote's substance per the stale/generic test above. You may still attack `cfa_lens.company_application` for analytical depth (recycled `variant_view`, unfalsifiable `falsifier`, textbook restatement) — but the validator does not require `primary_quote` on `company_application`, so if you want a quote there, frame it as "would strengthen this slot", not as a contract violation.
 
-**Severity rule.** ≥2 Cards 1–5 slots flagged, OR Card 5 lacks conviction-word AND asymmetry direction → `severity: critical`. Single weak slot → `severity: warn`. Use `attack_class: card_voice_substrate`.
+**Severity rule.** ≥2 Cards 1–4 slots flagged, OR Card 4 `cfa_lens.takeaway` lacks conviction-word AND asymmetry direction → `severity: critical`. Single weak slot → `severity: warn`. Use `attack_class: card_voice_substrate`.
 
 ### 6.b — Porter per-force methodology (P5.7 only)
 

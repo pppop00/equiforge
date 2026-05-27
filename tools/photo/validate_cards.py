@@ -16,7 +16,8 @@ Usage:
         --input <run_dir>/research/Apple_Research_CN.html \
         --slots <run_dir>/cards/Apple_Research_CN.card_slots.json \
         --brand "金融豹" \
-        --palette <confirmed_palette>
+        --palette <confirmed_palette> \
+        [--cfa-progress <USER.md:cfa_progress>]
 
 By default the report lands next to the slots file as `<slots_parent>/validator1_report.json`
 (matching workflow_meta.json's declared produces path). Pass `--report-out` to override.
@@ -70,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--report-out", default=None,
                    help="Where to write validator1_report.json. Defaults to "
                         "<slots-parent>/validator1_report.json.")
+    p.add_argument("--cfa-progress", default=None,
+                   help="CFA progress string passed through to EP's validate_cards.py "
+                        "so Card 4 CFA-lens selection is checked against the same concept "
+                        "the renderer will use.")
     args = p.parse_args(argv)
 
     ep_root = find_skill_root("ep")
@@ -85,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.allow_no_logo:
         cmd.append("--allow-no-logo")
+    if args.cfa_progress:
+        cmd.extend(["--cfa-progress", args.cfa_progress])
 
     result = subprocess.run(cmd, cwd=str(ep_root), capture_output=True, text=True, check=False)
     sys.stdout.write(result.stdout)
@@ -120,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         "exit_code": result.returncode,
         "palette": args.palette,
         "brand": args.brand,
+        "cfa_progress": args.cfa_progress,
         "allow_no_logo": bool(args.allow_no_logo),
         "input_html": args.input,
         "slots_path": str(slots_path),

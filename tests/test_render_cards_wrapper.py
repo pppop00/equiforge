@@ -25,7 +25,7 @@ def _write_png(path: Path, size: tuple[int, int]) -> None:
     Image.new("RGBA", size, (255, 255, 255, 0)).save(path)
 
 
-def test_sync_complete_render_copies_all_six_cards(tmp_path: Path) -> None:
+def test_sync_complete_render_copies_all_cards(tmp_path: Path) -> None:
     render_cards = _load_render_cards_module()
     rendered = tmp_path / "rendered"
     final = tmp_path / "cards"
@@ -40,7 +40,7 @@ def test_sync_complete_render_copies_all_six_cards(tmp_path: Path) -> None:
         expected_size=render_cards.FULL_RENDER_SIZE,
     )
 
-    assert sorted(p.name for p in final.glob("*.png")) == list(render_cards.EXPECTED_CARD_FILES)
+    assert sorted(p.name for p in final.glob("*.png")) == sorted(render_cards.EXPECTED_CARD_FILES)
     assert (final / "Example.card_slots.json").is_file()
 
 
@@ -73,7 +73,7 @@ def test_unexpected_card_dimensions_block_sync(tmp_path: Path) -> None:
     final = tmp_path / "cards"
 
     for name in render_cards.EXPECTED_CARD_FILES:
-        size = render_cards.LOGICAL_RENDER_SIZE if name == "03_revenue.png" else render_cards.FULL_RENDER_SIZE
+        size = render_cards.LOGICAL_RENDER_SIZE if name == "03_five_year_financials.png" else render_cards.FULL_RENDER_SIZE
         _write_png(rendered / name, size)
 
     with pytest.raises(RuntimeError, match="unexpected dimensions"):

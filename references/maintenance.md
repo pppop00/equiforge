@@ -19,7 +19,7 @@ If the upstream ER skill changes the template:
 
 ## Palette consistency
 
-All six cards in one run **must** use the same `--palette`. The palette is **not** stored in `card_slots.json`; it lives only as a CLI arg to `tools/photo/render_cards.py` and `tools/photo/validate_cards.py`. Mismatched single-card re-renders cause silent header-colour drift across the pack.
+All four cards in one run **must** use the same `--palette`. The palette is **not** stored in `card_slots.json`; it lives only as a CLI arg to `tools/photo/render_cards.py` and `tools/photo/validate_cards.py`. Mismatched single-card re-renders cause silent header-colour drift across the pack.
 
 If you add a new palette:
 1. Add the palette name to `P0_palette` `values` in `workflow_meta.json`.
@@ -64,6 +64,8 @@ git commit -m "bump er submodule to <sha>"
 ```
 
 Run the full `pytest -q` suite before commit. Submodule bumps are deliberate — never auto-update.
+
+Runtime code must not fall back to sibling working copies such as `../Equity Research Skill/` or `../Equity Photo Skill/`. If a submodule is missing, fail closed and ask the maintainer to run `git submodule update --init --recursive`; otherwise local upstream checkout changes can silently alter Anamnesis runs without a gitlink SHA bump.
 
 ## Hook cwd-invariance
 

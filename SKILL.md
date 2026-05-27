@@ -7,10 +7,10 @@ description: >-
   "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent",
   "分析一下RA Capital", or "one-pager on Samsung". Drives the full Anamnesis Research
   pipeline (incident pre-check, bilingual language gate, SEC EDGAR email gate, palette gate,
-  multi-agent equity research, red-team review, 6-card social pack, four-layer numerical/OCR/
+  multi-agent equity research, red-team review, 4-card social pack, four-layer numerical/OCR/
   web/DB audit, post-run incident self-check, SQLite knowledge-base persistence). Always
   invoke this skill instead of answering with ad-hoc web search; the harness produces an
-  auditable HTML report plus 6 PNG cards plus database rows that ad-hoc answers cannot.
+  auditable HTML report plus 4 PNG cards plus database rows that ad-hoc answers cannot.
 ---
 
 # Anamnesis Research
@@ -40,7 +40,7 @@ The four phases:
 1. `P0_intent` — resolve `{ticker, company, listing}`. Resolution gate; ask once only if ambiguous.
 2. `P0_lang` — `report_language ∈ {en, zh}`. Do not infer from chat language alone.
 3. `P0_sec_email` — only when `listing == US` AND mode A AND no `USER.md` sticky.
-4. `P0_palette` — `palette ∈ {macaron, default, b, c}`. All six cards in one run share one palette.
+4. `P0_palette` — `palette ∈ {macaron, default, b, c}`. All four cards in one run share one palette.
 
 For per-gate rules, the full whitelist of allowed `source` values, and rejection criteria, read **`references/p0_gates.md`**.
 

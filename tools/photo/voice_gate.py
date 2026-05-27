@@ -1,6 +1,6 @@
-"""P10.6 voice-gate wrapper — Cards 1-5 analyst-content gate (plan v3).
+"""P10.6 voice-gate wrapper — Cards 1-4 analyst-content gate (plan v3).
 
-The voice gate is the `validate_card1_5_analytical_content()` function inside
+The voice gate is the `validate_card1_4_analytical_content()` function inside
 EP's `generate_social_cards.py`; it's invoked by running EP's
 `skills_repo/ep/scripts/validate_cards.py` with both the rendered slots and
 the mandatory `<stem>.card_slots_worker_notes.json` sidecar present in the
@@ -79,7 +79,7 @@ def _worker_notes_sidecar(slots_path: Path) -> Path:
 def _classify_issue(line: str) -> dict:
     """Turn EP's free-form issue string into a structured dict.
 
-    EP emits lines like `worker_notes.brand_statement.data_anchor: no parseable number`.
+    EP emits lines like `worker_notes.cfa_lens.company_application: no parseable number`.
     We tokenise by the first ':' so callers can pivot by (slot, field).
     """
     if ":" in line:
@@ -104,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--report-out", default=None,
                    help="Where to write voice_gate.json. Defaults to "
                         "<run_dir>/validation/voice_gate.json when a run dir can be inferred.")
+    p.add_argument("--cfa-progress", default=None,
+                   help="CFA progress string passed through to EP's validate_cards.py "
+                        "so the Card 4 CFA-lens selection is checked against the same concept "
+                        "the renderer will use.")
     args = p.parse_args(argv)
 
     slots_path = Path(args.slots).resolve()
@@ -160,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.allow_no_logo:
         cmd.append("--allow-no-logo")
+    if args.cfa_progress:
+        cmd.extend(["--cfa-progress", args.cfa_progress])
 
     result = subprocess.run(cmd, cwd=str(ep_root), capture_output=True, text=True, check=False)
     sys.stdout.write(result.stdout)

@@ -312,7 +312,7 @@
       "retry_to": "P8_content",
       "retry_cap": 1,
       "blocks_on_fail": ["P10_7_RED_TEAM", "P11_render", "P_DB_INDEX"],
-      "executor_note": "Cards 1-5 analyst-content gate (plan v3). The Anamnesis wrapper tools/photo/voice_gate.py invokes EP's validate_cards.py with the mandatory <stem>.card_slots_worker_notes.json sidecar present, filters EP's stderr for analytical-content issues (worker_notes.* and card_slots.* lines), and writes validation/voice_gate.json. Checks: per-slot data_anchor (number + comp anchor), variant_view ≥15 chars, ≥1 of (falsifier ≥20 / primary_quote / catalyst_with_date), authority slots (brand_statement, judgement_paragraph) require primary_quote, backstop banned phrases. Deterministic gate; red_team_narrative §6.a attacks the quality of what passes here. Missing sidecar = fail (the gate cannot certify content it cannot see)."
+      "executor_note": "Cards 1-4 analyst-content gate (plan v3). The Anamnesis wrapper tools/photo/voice_gate.py invokes EP's validate_cards.py with the mandatory <stem>.card_slots_worker_notes.json sidecar present, filters EP's stderr for analytical-content issues (worker_notes.* and card_slots.* lines), and writes validation/voice_gate.json. Checks: per-slot data_anchor (number + comp anchor), variant_view ≥15 chars, ≥1 of (falsifier ≥20 / primary_quote / catalyst_with_date), Card 4 cfa_lens requires primary_quote on company_application, backstop banned phrases. Deterministic gate; red_team_narrative §6.a attacks the quality of what passes here. Missing sidecar = fail (the gate cannot certify content it cannot see)."
     },
     {
       "id": "P10_7_RED_TEAM",
@@ -332,11 +332,11 @@
       "retry_to": "P9_layout",
       "retry_cap": 1,
       "loop_rule": "if either attacker reports critical>0, loop once back to P9_layout (or P8_content if the defect is content-level, not layout-level); second critical halts and surfaces to user",
-      "executor_note": "Adversarial review of card_slots.json across all six cards. Checks numeric realizability, palette consistency, logo path, and cross-card narrative coherence."
+      "executor_note": "Adversarial review of card_slots.json across all four cards. Checks numeric realizability, palette consistency, logo path, and cross-card narrative coherence."
     },
     {
       "id": "P11_render",
-      "produces": ["cards/01_cover.png", "cards/02_background_industry.png", "cards/03_revenue.png", "cards/04_business_outlook.png", "cards/05_brand.png", "cards/06_post_copy.png"],
+      "produces": ["cards/01_cover.png", "cards/02_porter.png", "cards/03_five_year_financials.png", "cards/04_cfa_lens.png"],
       "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
@@ -349,7 +349,7 @@
         "validation/post_card_audit.json",
         "validation/QA_REPORT.md",
         "validation/reconciliation.csv",
-        "validation/ocr_dump/card_{1..6}.txt",
+        "validation/ocr_dump/card_{1..4}.txt",
         "validation/web_third_check.json",
         "validation/db_cross.json",
         "validation/user_agent_pii.json"

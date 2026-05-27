@@ -35,7 +35,7 @@ def _seed_slots(rd: Path, with_worker_notes: bool) -> Path:
     slots.write_text(json.dumps({"cover_company_name_cn": "苹果"}), encoding="utf-8")
     if with_worker_notes:
         sidecar = rd / "cards" / "Apple_Research_CN.card_slots_worker_notes.json"
-        sidecar.write_text(json.dumps({"brand_statement": {"data_anchor": {}}}),
+        sidecar.write_text(json.dumps({"cfa_lens": {"company_application": {"data_anchor": {}}}}),
                            encoding="utf-8")
     return slots
 
@@ -170,8 +170,8 @@ def test_voice_gate_classifies_worker_note_issues(
     html.write_text("<html></html>")
 
     stderr = (
-        "worker_notes.brand_statement.data_anchor: no parseable number\n"
-        "worker_notes.judgement_paragraph: missing primary_quote\n"
+        "worker_notes.cfa_lens.company_application: no parseable number\n"
+        "worker_notes.recent_financial_highlights: missing primary_quote\n"
         "card_slots.cover_intro: contains banned phrase '说白了'\n"
         "logo: missing\n"  # structural — should NOT appear in voice_gate.json
     )
@@ -191,12 +191,12 @@ def test_voice_gate_classifies_worker_note_issues(
     assert len(issues) == 3, f"expected 3 voice-related issues, got {issues}"
 
     slots_seen = {i["slot"] for i in issues if i["slot"]}
-    assert "brand_statement" in slots_seen
-    assert "judgement_paragraph" in slots_seen
+    assert "cfa_lens" in slots_seen
+    assert "recent_financial_highlights" in slots_seen
     assert "cover_intro" in slots_seen
 
     fields_seen = {i["field"] for i in issues if i["field"]}
-    assert "data_anchor" in fields_seen
+    assert "company_application" in fields_seen
 
     # structural `logo: missing` line must NOT appear in voice_gate.json
     assert not any("logo" in i["raw"] for i in issues)

@@ -11,11 +11,11 @@ This repo is a **harness-backed skill**:
 - **Skill side** (LLM-facing, auto-triggered): `SKILL.md` is the thin entry. It tells the model *what to do* and dictates a strict **boot order** — read on every research-style invocation. See `SKILL.md` § "Boot order — read in this order, every session".
 - **Harness side** (architecture/CLI/tests/DB/audit): `HARNESS.md` tells maintainers *how it runs*. The runtime brief that actually drives a research session is `agents/orchestrator.md`.
 
-The machine-readable phase + gate contract is `workflow_meta.json` (35 phases). It is authoritative — anything in prose docs that contradicts it is a bug in the prose.
+The machine-readable phase + gate contract is `workflow_meta.json` (33 phases). It is authoritative — anything in prose docs that contradicts it is a bug in the prose.
 
 ## Boot order for an Anamnesis Research run
 
-When the user asks for company research (any of the trigger phrases in `SKILL.md`), do **not** answer with ad-hoc web search. The harness produces an auditable HTML report + 6 PNG cards + DB rows that ad-hoc answers cannot. Open in order:
+When the user asks for company research (any of the trigger phrases in `SKILL.md`), do **not** answer with ad-hoc web search. The harness produces an auditable HTML report + 4 PNG cards + DB rows that ad-hoc answers cannot. Open in order:
 
 1. `SKILL.md`
 2. `MEMORY.md` — project invariants (load-bearing, frozen into `meta/system_prompt.frozen.txt`)
@@ -64,6 +64,7 @@ pytest tests/test_db_migrations.py -v      # cold + existing DB
 pytest tests/test_queries_cold_start.py    # DB precheck cold-start contract
 pytest tests/test_incident_loop.py -v      # P_INCIDENT_PRE/POSTCHECK contract
 pytest tests/test_skill_mount_parity.py -v # SKILL.md ≡ .claude/skills/.../SKILL.md
+pytest tests/test_skill_resolution.py -v   # ER/EP wrappers must NOT fall back to sibling working copies
 ```
 
 ## Architecture — the big picture
@@ -97,6 +98,7 @@ Critical findings from either attacker loop the writer once; a second critical h
 ### Composition by SHA-pinned submodule (not copy, not symlink)
 
 - `skills_repo/er/` (Equity Research Skill, P1..P6) and `skills_repo/ep/` (Equity Photo Skill, P7..P11) are pinned by SHA in `.gitmodules`. Bumps are deliberate — never auto-update.
+- Runtime wrappers resolve only these pinned submodule paths. Do not add fallback paths to sibling working copies such as `../Equity Research Skill/` or `../Equity Photo Skill/`; that would let Anamnesis runs drift with local upstream repos and break the separation between this harness and standalone ER/EP.
 - The root `agents/` directory contains **only** Anamnesis-Research-owned briefs (`orchestrator`, the four gate agents, `intent_resolver`, `cross_validator`, `post_card_auditor`, and `attackers/`). It does **not** symlink or alias upstream agents — `workflow_meta.json` references them by real path (`skills_repo/er/agents/...`, `skills_repo/ep/agents/...`). The path is the audit surface.
 - Each run records the resolved SHAs to `meta/submodule_shas.json`. After bumping a submodule, run `pytest -q` before committing.
 

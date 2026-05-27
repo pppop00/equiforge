@@ -80,13 +80,13 @@ flowchart TD
 
     %% ====== P7 / P8 / P8.5 / P9 ======
     P6 --> P7[P7 logo_production<br/>≥ 840 px · save into cards/ first]
-    P7 --> P8[P8 content_production<br/>card_slots.json — 17 keys]
+    P7 --> P8[P8 content_production<br/>card_slots.json — schema v2]
     P8 --> P85[P8.5 hardcode_audit]
     P85 --> P9[P9 layout_fill<br/>char / pixel budgets]
     P9 --> P10[P10 Validator 1<br/>validate_cards.py]
     P10 --> P105[P10.5 Validator 2<br/>web fact-check]
     P105 -->|"change ↩ cap=3"| P10
-    P105 -->|stable| P106[P10.6 voice_gate<br/>Cards 1-5 worker notes]
+    P105 -->|stable| P106[P10.6 voice_gate<br/>Cards 1-4 worker notes]
     P106 -->|"critical ↩ cap=1"| P8
 
     %% ====== P10.7 RED TEAM ======
@@ -100,7 +100,7 @@ flowchart TD
     P107join -->|0 critical| P11
 
     %% ====== P11 RENDER ======
-    P11[P11 render_cards.py<br/>6 PNGs · 2160×2700 · palette = P0_palette]
+    P11[P11 render_cards.py<br/>4 PNGs · 2160×2700 · palette = P0_palette]
 
     %% ====== P12 FOUR-LAYER AUDIT ======
     P11 --> P12[P12 final_audit ★<br/>post_card_auditor]
@@ -116,7 +116,7 @@ flowchart TD
 
     %% ====== DB INDEX ======
     PDB[P_DB_INDEX<br/>requires: P12 pass AND postcheck pass<br/>single transaction · rollback on failure]
-    PDB --> Done([✅ Deliver: HTML + 6 PNGs + DB rows + QA report])
+    PDB --> Done([✅ Deliver: HTML + 4 PNGs + DB rows + QA report])
 
     %% ====== STYLES ======
     classDef bracket fill:#fff3cd,stroke:#b8860b,stroke-width:2px,color:#000
@@ -162,11 +162,11 @@ flowchart TD
 | Red-team manifests | `meta/red_team/{phase_id}.input.json` |
 | Red-team verdicts | `validation/red_team_{numeric,narrative}_{phase}.json` |
 | Porter depth gate | `validation/porter_depth_gate.json` |
-| Cards 1-5 voice gate | `validation/voice_gate.json` |
+| Cards 1-4 voice gate | `validation/voice_gate.json` |
 | P12 audit + QA report | `validation/post_card_audit.json` + `validation/QA_REPORT.md` |
 | Incident post-check verdict | `validation/incident_postcheck.json` |
 | HTML report | `research/{Company}_Research_{LANG}.html` |
-| 6 PNGs | `cards/0{1..6}_*.png` |
+| 4 PNGs | `cards/0{1..4}_*.png` |
 | DB write summary | `db_export/rows_written.json` |
 
 ## What the colours mean (in the rendered diagram)

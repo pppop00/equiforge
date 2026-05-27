@@ -114,13 +114,13 @@ class ParsedProduces:
     pre-fix watchdog (Codex P2#2) just skipped anything with `{` or `:`,
     which silently let through unverified the very gates that matter most
     (`cards/{stem}.card_slots.json`, `research/structure_conformance.json:html_template_gate`,
-    `validation/ocr_dump/card_{1..6}.txt`). Each kind needs a different
+    `validation/ocr_dump/card_{1..4}.txt`). Each kind needs a different
     on-disk check:
 
     - **exact**: a literal filesystem path (`research/edge_insights.json`).
       Check the file exists.
     - **glob**: a path with `{template}` placeholders or `{N..M}` ranges
-      (`cards/{stem}.card_slots.json`, `validation/ocr_dump/card_{1..6}.txt`).
+      (`cards/{stem}.card_slots.json`, `validation/ocr_dump/card_{1..4}.txt`).
       Replace every `{...}` with `*` and require at least one match.
     - **json_key**: `path:key_name` (`meta/run.json:ticker`,
       `research/structure_conformance.json:html_template_gate`). Check the

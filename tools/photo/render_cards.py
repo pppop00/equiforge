@@ -28,11 +28,9 @@ from _common import find_skill_root, python_exec, script_path  # noqa: E402
 
 EXPECTED_CARD_FILES = (
     "01_cover.png",
-    "02_background_industry.png",
-    "03_revenue.png",
-    "04_business_outlook.png",
-    "05_brand.png",
-    "06_post_copy.png",
+    "02_porter.png",
+    "03_five_year_financials.png",
+    "04_cfa_lens.png",
 )
 FULL_RENDER_SIZE = (2160, 2700)
 LOGICAL_RENDER_SIZE = (1080, 1350)
@@ -63,8 +61,8 @@ def _sync_complete_render(rendered_dir: Path, output_root: Path, *, expected_siz
     """Copy a verified complete card set into the delivery folder.
 
     The EP renderer always writes to output_root / stem (its batch-mode convention).
-    The wrapper now renders into a temporary output root first, verifies all six
-    card PNGs, then overwrites the delivery cards. That keeps an existing good
+    The wrapper renders into a temporary output root first, verifies the full
+    card PNG set, then overwrites the delivery cards. That keeps an existing good
     delivery set intact if a render crashes or produces only a subset.
     """
     _validate_rendered_cards(rendered_dir, expected_size=expected_size)
@@ -93,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="Export 1080x1350 instead of 2160x2700.")
     p.add_argument("--no-copy-slots", action="store_true",
                    help="Do not copy card_slots.json into the output dir.")
+    p.add_argument("--cfa-progress", default=None,
+                   help="CFA progress string (e.g. 'Level 2 - Fixed Income - Binomial Tree'). "
+                        "Read from USER.md:cfa_progress by the orchestrator and passed through "
+                        "to EP's renderer for Card 4 CFA-lens selection.")
     args = p.parse_args(argv)
 
     ep_root = find_skill_root("ep")
@@ -112,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
         cmd.append("--export-logical-size")
     if args.no_copy_slots:
         cmd.append("--no-copy-slots")
+    if args.cfa_progress:
+        cmd.extend(["--cfa-progress", args.cfa_progress])
 
     if final_output_root is None:
         result = subprocess.run(cmd, cwd=str(ep_root), capture_output=True, text=True, check=False)

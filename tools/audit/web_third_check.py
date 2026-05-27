@@ -26,10 +26,24 @@ from _numerics import extract_numerics  # noqa: E402
 PRIORITY_PATHS = [
     "card_slots.intro_sentence",
     "card_slots.company_focus_paragraph",
-    "card_slots.judgement_paragraph",
+    "card_slots.metrics_row",
     "card_slots.industry_paragraph",
+    "card_slots.recent_financial_highlights",
     "card_slots.revenue_explainer_points",
+    "card_slots.five_year_arc",
 ]
+
+
+def _gather_text_chunks(node, path: str, out: list[tuple[str, str]]) -> None:
+    """Walk strings under a slot (string / list / nested dict)."""
+    if isinstance(node, str):
+        out.append((path, node))
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            _gather_text_chunks(item, f"{path}[{i}]", out)
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            _gather_text_chunks(v, f"{path}.{k}", out)
 
 
 def collect_priority_targets(slots: dict, top_n: int) -> list[dict]:
@@ -46,11 +60,10 @@ def collect_priority_targets(slots: dict, top_n: int) -> list[dict]:
                 break
         if node is None:
             continue
-        text_chunks = node if isinstance(node, list) else [node]
-        for chunk in text_chunks:
-            if not isinstance(chunk, str):
-                continue
-            for tok in extract_numerics(chunk, path=path):
+        text_chunks: list[tuple[str, str]] = []
+        _gather_text_chunks(node, path, text_chunks)
+        for chunk_path, chunk in text_chunks:
+            for tok in extract_numerics(chunk, path=chunk_path):
                 if tok.value in seen_values:
                     continue
                 if tok.unit not in {"pct", "pp", "yi", "wan", "wanyi", "billion", "million", "x"}:

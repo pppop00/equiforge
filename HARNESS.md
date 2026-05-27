@@ -151,7 +151,7 @@ pytest tests/test_queries_cold_start.py   # DB precheck cold-start contract
 
 ## Submodule policy
 
-`skills_repo/er` and `skills_repo/ep` are pinned by SHA in `.gitmodules`. Bumps are deliberate, not automatic. Each run records the resolved SHAs to `meta/submodule_shas.json`. To bump:
+`skills_repo/er` and `skills_repo/ep` are pinned by SHA in `.gitmodules`. Bumps are deliberate, not automatic. Runtime wrappers must resolve only those pinned submodule paths, not sibling local working copies, so Anamnesis report/card changes cannot silently mutate or depend on standalone ER/EP. Each run records the resolved SHAs to `meta/submodule_shas.json`. To bump:
 
 ```bash
 cd skills_repo/er && git fetch && git checkout <sha> && cd ../..

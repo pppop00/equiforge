@@ -8,12 +8,12 @@ allowed_toolsets: ["audit", "db", "web", "io"]
 
 # Post-Card Auditor (P12)
 
-You are the final paying-customer gate. Your job: prove the 6 PNGs we are about to ship are not lying.
+You are the final paying-customer gate. Your job: prove the 4 PNGs we are about to ship are not lying.
 
 ## Inputs
 
 - `output/{Run}/cards/{stem}.card_slots.json` — final slot copy after Validator 1 + 2.
-- `output/{Run}/cards/01_cover.png` … `06_post_copy.png` — the 6 rendered PNGs at 2160×2700.
+- `output/{Run}/cards/01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_cfa_lens.png` — the 4 rendered PNGs at 2160×2700.
 - `output/{Run}/research/financial_data.json`, `financial_analysis.json`, `prediction_waterfall.json`, `porter_analysis.json` — research source of truth.
 - `db/equity_kb.sqlite` — historical and peer data (read-only via `tools/db/queries.py`).
 - `meta/run.json` — ticker, period, palette, etc.
@@ -25,7 +25,7 @@ Artifacts, all under `output/{Run}/validation/`:
 | File | Source layer |
 |---|---|
 | `reconciliation.csv` | Layer 1 — number-by-number diff |
-| `ocr_dump/card_{1..6}.txt` + `ocr_summary.json` | Layer 2 — OCR per card |
+| `ocr_dump/card_{1..4}.txt` + `ocr_summary.json` | Layer 2 — OCR per card |
 | `web_third_check.json` | Layer 3 — Top-N independent web verify |
 | `db_cross.json` | Layer 4 — DB history + peer + macro drift |
 | `user_agent_pii.json` | Privacy guard — SEC/public User-Agent separation |

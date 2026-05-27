@@ -592,9 +592,25 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
             # card_slots
             if cs:
                 paths_by_n = {}
-                for n in range(1, 7):
+                for n in range(1, 5):
                     candidates = list(cards_dir.glob(f"{n:02d}_*.png"))
                     paths_by_n[n] = str(candidates[0]) if candidates else None
+                # The card_slots table carries legacy card5_png_path / card6_png_path columns
+                # (additive-only schema policy, see references/maintenance.md). The current
+                # card pack is 4 PNGs, so those two columns are written NULL.
+                #
+                # Schema-v2 mapping note (post 4-card cutover): the deleted-slot columns are
+                # repurposed without renaming to preserve the additive-only DB policy:
+                #   - brand_statement <- cfa_lens.takeaway  (the Card 4 takeaway is the closest
+                #     semantic analogue to the deleted brand_statement slot; both are single
+                #     conviction-bearing sentences printed below the cover/CFA payload).
+                #   - social_post     <- NULL  (post_title/post_content_lines/hashtags removed).
+                #   - card5_png_path  <- NULL  (Card 5 removed).
+                #   - card6_png_path  <- NULL  (Card 6 removed).
+                # Query writers reading brand_statement on rows where schema_version=2 are
+                # actually reading cfa_lens.takeaway.
+                cfa_lens = cs.get("cfa_lens") if isinstance(cs.get("cfa_lens"), dict) else {}
+                cfa_takeaway = cfa_lens.get("takeaway") if isinstance(cfa_lens, dict) else None
                 conn.execute(
                     """INSERT OR REPLACE INTO card_slots (
                            ticker, run_id, card_slots_json, cover_focus, brand_statement, social_post,
@@ -602,10 +618,10 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
                            card4_png_path, card5_png_path, card6_png_path
                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (ticker, run_id, json.dumps(cs, ensure_ascii=False),
-                     cs.get("company_focus_paragraph"), cs.get("brand_statement"),
-                     "\n".join(cs.get("post_content_lines") or []),
+                     cs.get("company_focus_paragraph"), cfa_takeaway,
+                     None,
                      paths_by_n[1], paths_by_n[2], paths_by_n[3],
-                     paths_by_n[4], paths_by_n[5], paths_by_n[6]),
+                     paths_by_n[4], None, None),
                 )
                 result.bump("card_slots")
 

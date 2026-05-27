@@ -193,7 +193,7 @@ anamnesis-research/                 # anamnesis-research (originally codenamed e
 │   ├── web/                        # search-only
 │   └── io/                         # run_dir bootstrap, log_incident digest
 │
-├── skills_repo/                    # git submodules — SHA-pinned upstream skills
+├── skills_repo/                    # git submodules — SHA-pinned upstream skills, no sibling fallback
 │   ├── er/                         # Equity Research Skill (P1..P6)
 │   └── ep/                         # Equity Photo Skill (P7..P11)
 │
@@ -215,7 +215,7 @@ anamnesis-research/                 # anamnesis-research (originally codenamed e
 ```bash
 git clone <this-repo-url> anamnesis-research
 cd anamnesis-research
-git submodule update --init --recursive    # pull ER + EP submodules (SHA-pinned)
+git submodule update --init --recursive    # pull ER + EP submodules (SHA-pinned; no sibling fallback)
 pip install -r requirements.txt
 python anamnesis.py init                   # build db/equity_kb.sqlite from db/schema/
 cp USER.md.template USER.md                # then edit defaults
@@ -244,7 +244,7 @@ The model will pull the latest run's digest, draft a candidate `INCIDENTS.md` en
 Anamnesis Research applies the pattern to a **35-phase pipeline** that fuses two upstream skills:
 
 - **Equity Research** — multi-agent research → interactive HTML report (locked SHA256-pinned template; no simplified bypass per `INCIDENTS.md` I-002)
-- **Equity Photo** — HTML → 6 fixed-layout PNG social cards (2160×2700, palette-locked)
+- **Equity Photo** — HTML → 4 fixed-layout PNG social cards (cover / Porter / 5-year + recent financials / CFA lens; 2160×2700, palette-locked)
 
 into one end-to-end workflow with a SQLite knowledge base, a four-layer post-card audit, and red-team adversaries at the report and card stages.
 
@@ -254,10 +254,10 @@ into one end-to-end workflow with a SQLite knowledge base, a four-layer post-car
 2. Walks the four P0 gates (intent, language, SEC email if US-listed, palette) — interactive gates halt and wait; auto mode does not waive them (per I-001)
 3. Runs the research pipeline (financials / macro / news in parallel, edge insight, financial analysis, prediction waterfall, QC peers, Porter analysis, cross-validation)
 4. Writes the HTML report by filling the locked skeleton; data validator clears it; **red team falsifies it** (`P5_7_RED_TEAM`)
-5. Builds 6 cards (logo ≥840 px, content, hardcode audit, layout fill, validators 1 and 2); **red team falsifies them pre-render** (`P10_7_RED_TEAM`)
-6. Renders 6 PNGs at 2160×2700; runs the four-layer P12 audit (numerical reconciliation + OCR + web third-check + DB cross-validation)
+5. Builds 4 cards (logo ≥840 px, content, hardcode audit, layout fill, validators 1 and 2); **red team falsifies them pre-render** (`P10_7_RED_TEAM`)
+6. Renders 4 PNGs at 2160×2700; runs the four-layer P12 audit (numerical reconciliation + OCR + web third-check + DB cross-validation)
 7. Re-checks `INCIDENTS.md` (`P_INCIDENT_POSTCHECK`) — flagged blocks DB write
-8. Lands a per-run output folder with research JSON, HTML report, 6 PNG cards, QA report, validation JSONs, and DB rows
+8. Lands a per-run output folder with research JSON, HTML report, 4 PNG cards, QA report, validation JSONs, and DB rows
 
 For the visual diagram see `references/workflow_diagram.md`. For the prose phase narrative see `references/phase_contract.md`. For the machine contract see `workflow_meta.json`.
 

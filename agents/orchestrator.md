@@ -23,7 +23,7 @@ One run directory at `output/{Company}_{Date}_{RunID}/` with the structure descr
 
 The root of the run directory is only an index. Do not write phase artifacts directly into it. Customer-facing deliverables are:
 - `research/{Company}_Research_{CN|EN}.html`
-- `cards/01_cover.png` ... `cards/06_post_copy.png`
+- `cards/01_cover.png`, `cards/02_porter.png`, `cards/03_five_year_financials.png`, `cards/04_cfa_lens.png`
 
 All JSON contracts, gates, logs, and DB summaries must stay in their subfolders (`meta/`, `research/`, `cards/`, `validation/`, `db_export/`, `logs/`). If a phase accidentally writes root-level JSON/HTML/PNG files, run `python tools/io/validate_run_artifacts.py --run-dir <run_dir> --fix` before handoff, then rerun it without `--fix`; exit 0 is required for a clean delivery tree.
 
@@ -60,9 +60,9 @@ The prose below uses the dotted shorthand (P1, P1.5, P2.6, P5.7, …) that maps 
 | P9 — layout fill | `P9_layout` |
 | P10 — Validator 1 | `P10_validator1` |
 | P10.5 — Validator 2 | `P10_5_validator2` |
-| P10.6 — Cards 1-5 analyst-content gate (plan v3) | `P10_6_voice_gate` |
+| P10.6 — Cards 1-4 analyst-content gate (plan v3) | `P10_6_voice_gate` |
 | P10.7 — red team cards | `P10_7_RED_TEAM` |
-| P11 — render six PNGs | `P11_render` |
+| P11 — render four PNGs | `P11_render` |
 | P12 — final audit (paying-customer gate) | `P12_final_audit` |
 | Post-check | `P_INCIDENT_POSTCHECK` |
 | DB index | `P_DB_INDEX` |
@@ -181,22 +181,23 @@ Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.
 
 ### 15. P7..P11 — card pipeline (EP)
 
-Walk the EP pipeline from `skills_repo/ep/SKILL.md`:
+Walk the EP pipeline from `skills_repo/ep/SKILL.md`. The card pack is **4 cards** (cover / Porter / 5-year + recent financials / CFA lens). Read `USER.md:cfa_progress` (a string like `"Level 2 - Fixed Income - Binomial Tree"`) if present; pass it through to every EP script invocation below with `--cfa-progress "<value>"` so Card 4's CFA-concept selector and its downstream validator both see the same concept. If `cfa_progress` is absent in `USER.md`, omit the flag — EP's selector falls back to its own default.
+
 1. **P7 logo** — delegate to `logo-production-agent.md`. Critical: it MUST save the logo into `output/.../cards/logo/` BEFORE setting `logo_asset_path`. If no official logo can be found, halt with an explanation.
-2. **P8 content** — delegate to `content-production-agent.md`; produces `cards/{stem}.card_slots.json` with all 17 top-level keys.
+2. **P8 content** — delegate to `content-production-agent.md`; produces `cards/{stem}.card_slots.json` per the card-slots schema v2 (`cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc`, `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens`, plus `logo_asset_path` set at P7).
 3. **P8.5 hardcode audit** — delegate to `hardcode-audit-agent.md` to verify no boilerplate, no cross-report residue, every sentence has a company-specific anchor.
 4. **P9 layout** — delegate to `layout-fill-agent.md` to compress to char/pixel budgets (do not invent facts).
-5. **P10 Validator 1** — `python tools/photo/validate_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette>`. Exit 0 required.
+5. **P10 Validator 1** — `python tools/photo/validate_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> [--cfa-progress "<USER.md:cfa_progress>"]`. Exit 0 required.
 6. **P10.5 Validator 2** — delegate to `validator-2-agent.md` with web tools enabled. Any change to `card_slots.json` → rerun P10. Loop cap = 3.
-7. **P10.7 RED TEAM** — fires **before** P11 render; cards do not yet exist as PNGs. Write `meta/red_team/P10_7_RED_TEAM.input.json` referencing all six `card_slots.json` files, the source `research/*.json`, `cards/validator{1,2}_report.json`, and the upstream P5.7 red-team outputs (so attackers know what was already challenged at the report stage). **Do NOT** include rendered-card paths in the manifest — they don't exist yet. Delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md` under their pre-render contracts: numeric attacks source-chain, basis/units, tolerance vs source JSONs, palette consistency, logo-path realizability, and *render-budget realizability* (will the value fit the card's char/pixel budget; will rounding shift mislead readers); narrative attacks Porter directionality, hidden assumptions, missing counter-evidence, and cross-card coherence. **Actual PNG OCR is P12 layer 2, not P10.7.** If either reports `summary.critical > 0`, loop back once to `P9_layout` (or `P8_content` when the defect is content-level, not layout-level) with both attackers' challenge lists combined. Red-team retry cap = 1 here. A second critical = halt.
-8. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards`. Verify 6 PNGs at 2160×2700.
+7. **P10.7 RED TEAM** — fires **before** P11 render; cards do not yet exist as PNGs. Write `meta/red_team/P10_7_RED_TEAM.input.json` referencing the `card_slots.json` file, the source `research/*.json`, `cards/validator{1,2}_report.json`, and the upstream P5.7 red-team outputs (so attackers know what was already challenged at the report stage). **Do NOT** include rendered-card paths in the manifest — they don't exist yet. Delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md` under their pre-render contracts: numeric attacks source-chain, basis/units, tolerance vs source JSONs, palette consistency, logo-path realizability, and *render-budget realizability* (will the value fit the card's char/pixel budget; will rounding shift mislead readers); narrative attacks Porter directionality, hidden assumptions, missing counter-evidence, and cross-card coherence. **Actual PNG OCR is P12 layer 2, not P10.7.** If either reports `summary.critical > 0`, loop back once to `P9_layout` (or `P8_content` when the defect is content-level, not layout-level) with both attackers' challenge lists combined. Red-team retry cap = 1 here. A second critical = halt.
+8. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards [--cfa-progress "<USER.md:cfa_progress>"]`. Verify 4 PNGs at 2160×2700.
 9. **Artifact tree check** — `python tools/io/validate_run_artifacts.py --run-dir <run_dir>`. If it reports known misplaced root artifacts, rerun with `--fix`, then rerun without `--fix`. Unknown root artifacts are a delivery blocker until moved or deleted intentionally.
 
 ### 16. P12 — final post-card audit ★
 
 Delegate to `agents/post_card_auditor.md`. It runs four layers in order:
 1. `tools/audit/reconcile_numbers.py` — every numeric in `card_slots.json` matches its source JSON within tolerance (see `MEMORY.md`).
-2. `tools/audit/ocr_cards.py` — OCR the 6 PNGs; every key numeric appears in pixels.
+2. `tools/audit/ocr_cards.py` — OCR the 4 PNGs; every key numeric appears in pixels.
 3. `tools/audit/web_third_check.py` — emits a `pending` envelope of Top-3 priority targets. The `post_card_auditor` agent is expected to fill each target's `verification` / `source_url` / `source_value` via host web tools before the aggregator reads the file. **Honest status**: this layer is `fail_blocks: false` in `workflow_meta.json`; an unfilled `pending` envelope downgrades to `warn` rather than fail. Do not claim Top-3 was "verified" if you did not actually fill the envelope. A future PR may add a host-filled verification step that re-enables fail-block.
 4. `tools/audit/db_cross_validate.py` — cross-check vs DB history + peers + macro snapshot.
 5. `tools/audit/user_agent_pii.py` — verify `public_user_agent` exists when SEC email is active and scan captured request logs for the SEC email next to non-SEC URLs.
@@ -239,16 +240,16 @@ Only after P12 reports `status: pass` (or warn-only) **AND** `P_INCIDENT_POSTCHE
 
 Print to the user (in `report_language`):
 - The run dir absolute path.
-- The 6 card PNG paths.
+- The 4 card PNG paths.
 - The HTML report path.
 - Number of WARNING items in QA_REPORT.md.
 - Number of new DB rows written and any peer-divergence flags.
 
-Do not list every intermediate JSON in the handoff unless the user asks for audit internals; the primary deliverables are the HTML report and six cards.
+Do not list every intermediate JSON in the handoff unless the user asks for audit internals; the primary deliverables are the HTML report and four cards.
 
 ## Rules of engagement
 
-- **Never bypass an interactive P0 gate (P0_lang / P0_sec_email / P0_palette)** by inventing a value or picking a default. The only allowed `source` values across these three gates are `user_response`, `USER.md sticky`, plus the gate-specific extras whitelisted in each agent (`explicit_phrase` for language, `skipped` / `declined` for SEC email). **Auto-mode does not waive these gates** — they exist because the answer is not derivable from the prompt and the cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across 6 cards) is a full re-run. If neither `user_response` nor a sticky value (nor a whitelisted extra) is available, halt and ask. Inventing sources like `auto_mode_default` is a P0 violation and will be caught in `meta/gates.json` review. (`P0_intent` is different: it is a resolution gate, and `prompt_unambiguous` is a valid `source` there because identity often *is* derivable from the prompt.)
+- **Never bypass an interactive P0 gate (P0_lang / P0_sec_email / P0_palette)** by inventing a value or picking a default. The only allowed `source` values across these three gates are `user_response`, `USER.md sticky`, plus the gate-specific extras whitelisted in each agent (`explicit_phrase` for language, `skipped` / `declined` for SEC email). **Auto-mode does not waive these gates** — they exist because the answer is not derivable from the prompt and the cost of guessing wrong (wrong-language report, missing SEC User-Agent, wrong palette across the card pack) is a full re-run. If neither `user_response` nor a sticky value (nor a whitelisted extra) is available, halt and ask. Inventing sources like `auto_mode_default` is a P0 violation and will be caught in `meta/gates.json` review. (`P0_intent` is different: it is a resolution gate, and `prompt_unambiguous` is a valid `source` there because identity often *is* derivable from the prompt.)
 - **Never** fabricate ER agent outputs. If a subagent fails twice, surface the failure with the run dir path; do not retry a third time.
 - **Never** skip P12 unless the user types something like "skip audit / 跳过审计" in the same turn — and even then, log a `phase_skipped` event so the absence is auditable.
 - **Never** edit the locked HTML skeleton structure during P5. The SHA256 pin in ER's tests will catch you.

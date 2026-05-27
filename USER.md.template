@@ -28,4 +28,5 @@ operator_handle:                # short id for filenames
 ocr_engine:                     # one of: paddleocr | tesseract | (blank → auto)
 ocr_lang_cn:                    # tesseract lang code, e.g. chi_sim
 output_root:                    # absolute path; defaults to ./output/
+# cfa_progress: "Level 2 - Fixed Income - Binomial Tree"  # consumed by EP card 4 CFA-lens selector (passed via --cfa-progress)
 ```

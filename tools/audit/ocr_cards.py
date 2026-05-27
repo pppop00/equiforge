@@ -24,40 +24,37 @@ from _numerics import extract_numerics, NumericToken  # noqa: E402
 
 CARD_FILE_TO_INDEX = {
     "01_cover.png": 1,
-    "02_background_industry.png": 2,
-    "03_revenue.png": 3,
-    "04_business_outlook.png": 4,
-    "05_brand.png": 5,
-    "06_post_copy.png": 6,
+    "02_porter.png": 2,
+    "03_five_year_financials.png": 3,
+    "04_cfa_lens.png": 4,
 }
 
 # Slot keys → which card index they appear on (1-indexed)
 SLOT_TO_CARD = {
     "intro_sentence": 1,
     "company_focus_paragraph": 1,
-    "background_bullets": 2,
-    "industry_paragraph": 2,
+    "metrics_row": 1,
+    "industry_paragraph": 1,
+    "background_bullets": 1,
     "porter_scores": 2,
-    "conclusion_block": 2,
+    "porter_evidence": 2,
+    "five_year_arc": 3,
+    "recent_financial_highlights": 3,
     "revenue_explainer_points": 3,
-    "current_business_points": 4,
-    "future_watch_points": 4,
-    "judgement_paragraph": 4,
-    "brand_statement": 5,
-    "memory_points": 5,
-    "post_title": 6,
-    "post_content_lines": 6,
-    "hashtags": 6,
+    "cfa_lens": 4,
 }
 
 # Slot keys whose missing numerics fail-block (paying-customer-critical)
 KEY_SLOT_KEYS = {
     "intro_sentence",
     "company_focus_paragraph",
-    "industry_paragraph",
-    "revenue_explainer_points",
-    "judgement_paragraph",
+    "metrics_row",
     "porter_scores",
+    "porter_evidence",
+    "five_year_arc",
+    "recent_financial_highlights",
+    "revenue_explainer_points",
+    "cfa_lens",
 }
 
 
@@ -126,25 +123,36 @@ def value_appears_in_text(value: float, text: str) -> bool:
     return False
 
 
+def _walk_numerics(slot_key: str, path: str, value, sink: list[tuple[str, NumericToken]]) -> None:
+    """Recurse into strings/lists/dicts under a slot, harvesting numerics with full path context."""
+    if isinstance(value, str):
+        for tok in extract_numerics(value, path=path):
+            sink.append((slot_key, tok))
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            child_path = f"{path}[{i}]"
+            if isinstance(item, (int, float)) and not isinstance(item, bool):
+                sink.append((slot_key, NumericToken(raw=str(item), value=float(item), unit=None,
+                                                    context=f"{child_path}={item}",
+                                                    path=child_path)))
+            else:
+                _walk_numerics(slot_key, child_path, item, sink)
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            _walk_numerics(slot_key, f"{path}.{k}", v, sink)
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        sink.append((slot_key, NumericToken(raw=str(value), value=float(value), unit=None,
+                                             context=f"{path}={value}", path=path)))
+
+
 def collect_card_numerics(slots: dict) -> dict[int, list[tuple[str, NumericToken]]]:
     """Map card_index → [(slot_key, NumericToken)] from card_slots.json."""
-    by_card: dict[int, list[tuple[str, NumericToken]]] = {i: [] for i in range(1, 7)}
+    by_card: dict[int, list[tuple[str, NumericToken]]] = {i: [] for i in range(1, 5)}
     for key, value in slots.items():
         card_idx = SLOT_TO_CARD.get(key)
         if not card_idx:
             continue
-        if isinstance(value, str):
-            for tok in extract_numerics(value, path=key):
-                by_card[card_idx].append((key, tok))
-        elif isinstance(value, list):
-            for i, item in enumerate(value):
-                if isinstance(item, str):
-                    for tok in extract_numerics(item, path=f"{key}[{i}]"):
-                        by_card[card_idx].append((key, tok))
-                elif isinstance(item, (int, float)) and not isinstance(item, bool):
-                    by_card[card_idx].append((key, NumericToken(raw=str(item), value=float(item), unit=None,
-                                                                  context=f"{key}[{i}]={item}",
-                                                                  path=f"{key}[{i}]")))
+        _walk_numerics(key, key, value, by_card[card_idx])
     return by_card
 
 
