@@ -1,6 +1,6 @@
-"""P10.6 voice-gate wrapper — Cards 1-4 analyst-content gate (plan v3).
+"""P10.6 evidence-gate wrapper — Cards 1-5 claim-level provenance.
 
-The voice gate is the `validate_card1_4_analytical_content()` function inside
+The active gate is the `validate_card1_5_analytical_content()` function inside
 EP's `generate_social_cards.py`; it's invoked by running EP's
 `skills_repo/ep/scripts/validate_cards.py` with both the rendered slots and
 the mandatory `<stem>.card_slots_worker_notes.json` sidecar present in the
@@ -17,7 +17,7 @@ This wrapper exists for two reasons:
 
 2. Even though P10 and P10.6 use the *same* EP script, they semantically
    differ: P10 cares about structural / palette / logo issues; P10.6 cares
-   about analyst-content issues from worker_notes. Running them as two
+   about claim-evidence issues from worker_notes. Running them as two
    separate wrappers — even if both invoke the same EP CLI — lets each
    produce its own purpose-built report and gives the orchestrator two
    distinct retry targets when one fails.
@@ -79,8 +79,7 @@ def _worker_notes_sidecar(slots_path: Path) -> Path:
 def _classify_issue(line: str) -> dict:
     """Turn EP's free-form issue string into a structured dict.
 
-    EP emits lines like `worker_notes.cfa_lens.company_calculation: no parseable number`
-    (the v3 authority slot — see EP's `AUTHORITY_SLOTS = ("company_calculation",)`).
+    EP emits lines like `worker_notes.claims[3].source_refs: must contain at least one source`.
     We tokenise by the first ':' so callers can pivot by (slot, field).
     """
     if ":" in line:
@@ -105,10 +104,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--report-out", default=None,
                    help="Where to write voice_gate.json. Defaults to "
                         "<run_dir>/validation/voice_gate.json when a run dir can be inferred.")
-    p.add_argument("--cfa-progress", default=None,
-                   help="CFA progress string passed through to EP's validate_cards.py "
-                        "so the Card 4 CFA-lens selection is checked against the same concept "
-                        "the renderer will use.")
     args = p.parse_args(argv)
 
     slots_path = Path(args.slots).resolve()
@@ -165,9 +160,6 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.allow_no_logo:
         cmd.append("--allow-no-logo")
-    if args.cfa_progress:
-        cmd.extend(["--cfa-progress", args.cfa_progress])
-
     result = subprocess.run(cmd, cwd=str(ep_root), capture_output=True, text=True, check=False)
     sys.stdout.write(result.stdout)
     sys.stderr.write(result.stderr)
@@ -180,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         line = line.strip()
         if not line:
             continue
-        if line.startswith(("worker_notes.", "card_slots.")):
+        if line.startswith(("worker_notes.", "card_slots.")) or "claim-evidence gate" in line:
             voice_issues.append(_classify_issue(line))
 
     status = "pass" if result.returncode == 0 and not voice_issues else "fail"

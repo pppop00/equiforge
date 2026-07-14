@@ -7,14 +7,14 @@ description: What an Anamnesis Research run produces on disk. Read this when you
 
 Every run lands in `output/{Company}_{Date}_{RunID}/` with this fixed structure. The orchestrator must produce all of it; downstream tooling (`tools/db/index_run.py`, `tools/audit/*`, the eval viewer) assumes these paths verbatim.
 
-The run-dir root is not a deliverable folder. It must contain only the standard subfolders below (plus harmless OS metadata such as `.DS_Store`). The customer-facing deliverables are the HTML report in `research/` and the four PNG cards in `cards/`; everything else is an audit contract or runtime trace.
+The run-dir root is not a deliverable folder. It must contain only the standard subfolders below (plus harmless OS metadata such as `.DS_Store`). The customer-facing deliverables are the HTML report in `research/` and the five PNG cards in `cards/`; everything else is an audit contract or runtime trace.
 
 | Subfolder | Contents |
 |---|---|
 | `meta/` | `run.jsonl` event log, `system_prompt.frozen.txt`, `gates.json`, `submodule_shas.json`, `workflow_meta.snapshot.json`, `run.json` (resolved `{ticker, company, listing, report_language, sec_email, palette}`) |
 | `research/` | All ER JSON artifacts + the locked-template HTML report (`{Company}_Research_{CN\|EN}.html`) + `cross_validation.json` + `report_validation.txt` + `structure_conformance.json` |
-| `cards/` | `logo/{slug}_wordmark.png` + `{stem}.card_slots.json` + 4 PNGs (`01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_cfa_lens.png`) + `validator1_report.json` + `validator2_report.json` |
-| `validation/` | P12 audit: `post_card_audit.json`, `QA_REPORT.md`, `reconciliation.csv`, `ocr_dump/card_{1..4}.txt`, `web_third_check.json`, `db_cross.json`, `user_agent_pii.json` |
+| `cards/` | `logo/{slug}_wordmark.png` + `{stem}.card_slots.json` + `{stem}.card_slots_worker_notes.json` + 5 PNGs (`01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_company_quality.png`, `05_country_lens.png`) + `validator1_report.json` + `validator2_report.json` |
+| `validation/` | P12 audit: `post_card_audit.json`, `QA_REPORT.md`, `reconciliation.csv`, `ocr_dump/card_{1..5}.txt`, `web_third_check.json`, `db_cross.json`, `user_agent_pii.json`; optional non-blocking `reader_test.json` |
 | `db_export/` | `rows_written.json`, `peer_context.json`, `prior_financials_used.json`, `db_index_summary.json` (and `index_error.json` on failure) |
 | `logs/` | `tools.jsonl` per-tool telemetry |
 
@@ -31,7 +31,9 @@ python tools/io/validate_run_artifacts.py --run-dir <run_dir> --fix
 python tools/io/validate_run_artifacts.py --run-dir <run_dir>
 ```
 
-Unknown root-level artifacts are delivery blockers until intentionally moved into one of the subfolders or removed. Do not hand off a run by listing every intermediate JSON; list the report HTML, four card PNGs, QA warning count, and DB write summary.
+Unknown root-level artifacts are delivery blockers until intentionally moved into one of the subfolders or removed. Do not hand off a run by listing every intermediate JSON; list the report HTML, five card PNGs, QA warning count, and DB write summary.
+
+`validation/reader_test.json` follows `references/reader_test.md`. It must contain results from at least five real readers; agents never simulate it. Because this is post-delivery product research, `pending` or absent reader testing does not block P12 or database indexing.
 
 After `P_DB_INDEX` succeeds, `db/equity_kb.sqlite` has new rows for this `(ticker, period)` that future runs (same company, sibling peers in the same sector) will reuse as priors / peer context.
 

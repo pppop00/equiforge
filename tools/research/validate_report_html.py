@@ -146,6 +146,11 @@ METRIC_VERDICT_VOCAB: frozenset[str] = frozenset({
     "Equity deficit widened", "Ending equity negative", "N/A",
 })
 
+APPENDIX_CONFIDENCE_VOCAB: frozenset[str] = frozenset({
+    "高", "中等", "低",
+    "High", "Medium", "Low",
+})
+
 
 def _find_single_report(research_dir: Path) -> Path | None:
     candidates = sorted(
@@ -394,6 +399,69 @@ def _validate_metrics_table(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
         errors.append(
             f"metrics-table missing required ratio categories: {missing} (I-005)"
         )
+
+    return errors, warnings
+
+
+def _validate_appendix_table(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+    """Appendix source table shape.
+
+    The locked CN template's appendix source table has four columns:
+    来源类型 / 具体来源 / 数据日期 / 置信度. A previous Kohl's run filled
+    only the first three cells, leaving the user-visible `置信度` column
+    blank while the locked-template validator still passed. Treat missing
+    cells and empty confidence as a rendered-report failure.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    table = soup.select_one("#section-appendix table.appendix-table")
+    if table is None:
+        errors.append("missing #section-appendix <table class='appendix-table'>")
+        return errors, warnings
+
+    if "{{APPENDIX_SOURCE_ROWS}}" in table.decode_contents():
+        # Raw skeleton/template mode: placeholders are checked separately.
+        return errors, warnings
+
+    thead_cells = table.select("thead tr th")
+    if len(thead_cells) != 4:
+        errors.append(
+            f"appendix-table header must contain exactly 4 <th>; got {len(thead_cells)}"
+        )
+    else:
+        headers = [th.get_text(" ", strip=True) for th in thead_cells]
+        expected = ["来源类型", "具体来源", "数据日期", "置信度"]
+        if headers != expected:
+            warnings.append(
+                f"appendix-table header differs from expected {expected}: {headers}"
+            )
+
+    rows = table.select("tbody tr")
+    if not rows:
+        errors.append("appendix-table tbody must contain at least one source row")
+        return errors, warnings
+
+    for idx, tr in enumerate(rows, start=1):
+        cells = tr.find_all("td", recursive=False)
+        if len(cells) != 4:
+            errors.append(
+                f"appendix-table row[{idx}] must have exactly 4 <td> "
+                f"(来源类型/具体来源/数据日期/置信度); got {len(cells)}"
+            )
+            continue
+        values = [td.get_text(" ", strip=True) for td in cells]
+        for col_idx, value in enumerate(values, start=1):
+            if not value:
+                errors.append(
+                    f"appendix-table row[{idx}] column[{col_idx}] is blank"
+                )
+        confidence = values[3]
+        if confidence and confidence not in APPENDIX_CONFIDENCE_VOCAB:
+            errors.append(
+                f"appendix-table row[{idx}] confidence '{confidence}' is not in "
+                f"{sorted(APPENDIX_CONFIDENCE_VOCAB)}"
+            )
 
     return errors, warnings
 
@@ -767,6 +835,10 @@ def validate_html_report(
     metrics_errors, metrics_warnings = _validate_metrics_table(soup)
     errors.extend(metrics_errors)
     warnings.extend(metrics_warnings)
+
+    appendix_errors, appendix_warnings = _validate_appendix_table(soup)
+    errors.extend(appendix_errors)
+    warnings.extend(appendix_warnings)
 
     # Writing-style gate (rules in `skills_repo/er/references/report_style_guide_cn.md`).
     # Only runs on rendered reports; raw template mode has nothing to inspect yet.

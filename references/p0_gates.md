@@ -44,7 +44,7 @@ Each gate's answer is recorded in `meta/gates.json` with a `source` field. Only 
 - **Goal**: `palette ∈ {macaron, default, b, c}`.
 - **Agent**: `agents/palette_gate.md`.
 - **Sticky source**: `USER.md:default_palette`.
-- **Why it blocks**: the palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header-colour drift across the 4-card pack. All four cards in one run must use the same `--palette`.
+- **Why it blocks**: the palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header-colour drift across the 5-card pack. All five cards in one run must use the same `--palette`.
 - **Allowed `source` values**: `user_response`, `USER.md sticky`.
 
 ## What never counts as a valid source (interactive gates only)

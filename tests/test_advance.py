@@ -180,7 +180,7 @@ def test_parse_glob_with_template() -> None:
 
 
 def test_parse_glob_with_numeric_range() -> None:
-    p = _parse_produces("validation/ocr_dump/card_{1..4}.txt")
+    p = _parse_produces("validation/ocr_dump/card_{1..5}.txt")
     assert p.kind == "glob"
     assert p.path == "validation/ocr_dump/card_*.txt"
 

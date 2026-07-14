@@ -28,6 +28,9 @@ RESEARCH_FILES = (
     "macro_factors.json",
     "edge_insights.json",
     "news_intel.json",
+    "company_quality.json",
+    "country_lens.json",
+    "metric_basis.json",
 )
 
 

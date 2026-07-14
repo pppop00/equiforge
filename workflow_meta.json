@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "name": "anamnesis-research",
   "codename": "equiforge",
-  "description": "End-to-end equity research + social card pipeline built on the Anamnesis Pattern (cross-session institutional memory + scheduled adversarial review). Persistent knowledge base, four-layer audit, two attacker agents, incident pre/post-check bracket. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
+  "description": "End-to-end listed-company research + five-card company-to-country knowledge-map pipeline built on the Anamnesis Pattern. Persistent knowledge base, four-layer audit, two attacker agents, incident pre/post-check bracket. Fuses skills_repo/er and skills_repo/ep under a single orchestrator.",
   "phases": [
     {
       "id": "P_INCIDENT_PRECHECK",
@@ -74,7 +74,7 @@
     },
     {
       "id": "P1_parallel_research",
-      "produces": ["research/financial_data.json", "research/macro_factors.json", "research/news_intel.json"],
+      "produces": ["research/financial_data.json", "research/macro_factors.json", "research/news_intel.json", "research/company_context_research.json"],
       "blocking": true,
       "interactive": false,
       "parallelism": "parallel",
@@ -82,7 +82,8 @@
       "agents": [
         "skills_repo/er/agents/financial_data_collector.md",
         "skills_repo/er/agents/macro_scanner.md",
-        "skills_repo/er/agents/news_researcher.md"
+        "skills_repo/er/agents/news_researcher.md",
+        "skills_repo/er/agents/company_context_researcher.md"
       ],
       "short_circuits": {
         "macro_scanner": "if P0_DB_PRECHECK returns a fresh macro_snapshot for primary_geography, skip web collection and reuse"
@@ -100,13 +101,16 @@
       "id": "P2_analysis",
       "produces": [
         "research/financial_analysis.json",
-        "research/prediction_waterfall.json"
+        "research/prediction_waterfall.json",
+        "research/company_quality.json",
+        "research/country_lens.json",
+        "research/metric_basis.json"
       ],
       "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
       "inline": true,
-      "executor_note": "Consolidated phase: financial analysis -> prediction waterfall -> Sankey injection into financial_analysis.json. Run by orchestrator with research+io toolsets; no dedicated subagent. Replaces the prior P2_fin_analysis / P2_5_waterfall / P4_sankey trio — those were three sequential inline phases that always ran together and produced linked artifacts. Internal order: write financial_analysis.json -> write prediction_waterfall.json (uses analysis as input) -> append the Sankey payload into financial_analysis.json. All three steps must complete before P2_6_qc_macro reads either artifact.",
+      "executor_note": "Consolidated phase: financial analysis -> prediction waterfall -> Sankey injection -> company-quality/country-lens/metric-basis normalization. Run by orchestrator with research+io toolsets. Internal order: write financial_analysis.json -> prediction_waterfall.json -> append Sankey -> normalize company_quality.json, country_lens.json, and metric_basis.json from company_context_research.json plus the other research artifacts. All outputs must complete before downstream QC.",
       "consolidates": ["P2_fin_analysis", "P2_5_waterfall", "P4_sankey"]
     },
     {
@@ -153,19 +157,21 @@
     },
     {
       "id": "P3_7_X_VALIDATE",
-      "produces": ["research/cross_validation.json"],
-      "blocking": false,
+      "produces": ["research/cross_validation.json", "validation/metric_basis_validation.json"],
+      "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
       "agent": "agents/cross_validator.md",
       "tool": "tools/audit/db_cross_validate.py",
+      "additional_tool": "tools/research/validate_metric_basis.py",
       "rules": [
         "self_history_yoy_consistency: CRITICAL if recomputed YoY deviates >5pp from reported",
         "segment_drift: WARNING if any segment pct_of_total shifts >15pp without disclosure_quirks explaining basis change",
         "peer_porter_divergence: WARNING if focal differs from peer median by >=2 with <2 peers agreeing",
         "macro_factor_drift: WARNING if same (geography, period) factor differs >0.5pp from prior or beta differs >0.2",
         "predicted_vs_prior_actual: WARNING (calibration data; never blocks)",
-        "sector_macro_identity: CRITICAL only in mode==A — same (geography, period) macro vector should match across peers"
+        "sector_macro_identity: CRITICAL only in mode==A — same (geography, period) macro vector should match across peers",
+        "metric_basis_registry: CRITICAL if any required metric key is missing, a calculation references an unknown basis_id, or a comparable claim uses not_comparable bases"
       ]
     },
     {
@@ -257,7 +263,7 @@
     },
     {
       "id": "P8_content",
-      "produces": ["cards/{stem}.card_slots.json"],
+      "produces": ["cards/{stem}.card_slots.json", "cards/{stem}.card_slots_worker_notes.json"],
       "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
@@ -312,7 +318,7 @@
       "retry_to": "P8_content",
       "retry_cap": 1,
       "blocks_on_fail": ["P10_7_RED_TEAM", "P11_render", "P_DB_INDEX"],
-      "executor_note": "Cards 1-4 analyst-content gate (plan v3, card-slot schema v3). The Anamnesis wrapper tools/photo/voice_gate.py invokes EP's validate_cards.py with the mandatory <stem>.card_slots_worker_notes.json sidecar present, filters EP's stderr for analytical-content issues (worker_notes.* and card_slots.* lines), and writes validation/voice_gate.json. Checks: per-slot data_anchor (number + comp anchor), variant_view ≥15 chars, ≥1 of (falsifier ≥20 / primary_quote / catalyst_with_date), Card 4 cfa_lens authority slot is cfa_lens.company_calculation (requires primary_quote in worker_notes; the deleted-in-v3 cfa_lens.takeaway slot is no longer in scope). Card 4 also requires non-empty cfa_lens.formula (contains '=' and operators) and non-empty cfa_lens.company_calculation (1-3 lines, ≥1 with a digit) as deterministic hard-rule slots. Backstop banned phrases still apply. red_team_narrative §6.a attacks the quality of what passes here. Missing sidecar = fail (the gate cannot certify content it cannot see)."
+      "executor_note": "Schema-v5 Cards 1-5 claim-evidence gate. The wrapper invokes EP validation with the mandatory sidecar and writes validation/voice_gate.json. Card 1 variables must remain separately aligned and Card 2 background_bullets must follow external_condition -> transmission -> company_outcome -> watch_signal. Every material claim requires claim_id, visible slot_path, fixed epistemic_type, source_refs, as_of_date, plus basis_id for calculations and falsifier for inference/forecast. Visible copy naturally states its source type; confidence badges stay off-card. Missing sidecar or required claim coverage fails."
     },
     {
       "id": "P10_7_RED_TEAM",
@@ -332,11 +338,11 @@
       "retry_to": "P9_layout",
       "retry_cap": 1,
       "loop_rule": "if either attacker reports critical>0, loop once back to P9_layout (or P8_content if the defect is content-level, not layout-level); second critical halts and surfaces to user",
-      "executor_note": "Adversarial review of card_slots.json across all four cards. Checks numeric realizability, palette consistency, logo path, and cross-card narrative coherence."
+      "executor_note": "Adversarial review of schema-v5 card_slots.json across all five cards. Checks numeric and metric-basis realizability, palette/logo, governance and accounting evidence, country stereotyping, exposure-geography conflation, and cross-card coherence."
     },
     {
       "id": "P11_render",
-      "produces": ["cards/01_cover.png", "cards/02_porter.png", "cards/03_five_year_financials.png", "cards/04_cfa_lens.png"],
+      "produces": ["cards/01_cover.png", "cards/02_porter.png", "cards/03_five_year_financials.png", "cards/04_company_quality.png", "cards/05_country_lens.png"],
       "blocking": true,
       "interactive": false,
       "parallelism": "sequential",
@@ -349,7 +355,7 @@
         "validation/post_card_audit.json",
         "validation/QA_REPORT.md",
         "validation/reconciliation.csv",
-        "validation/ocr_dump/card_{1..4}.txt",
+        "validation/ocr_dump/card_{1..5}.txt",
         "validation/web_third_check.json",
         "validation/db_cross.json",
         "validation/user_agent_pii.json"

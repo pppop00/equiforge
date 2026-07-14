@@ -7,10 +7,10 @@ description: >-
   "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent",
   "分析一下RA Capital", or "one-pager on Samsung". Drives the full Anamnesis Research
   pipeline (incident pre-check, bilingual language gate, SEC EDGAR email gate, palette gate,
-  multi-agent equity research, red-team review, 4-card social pack, four-layer numerical/OCR/
+  multi-agent listed-company research, red-team review, 5-card company-to-country knowledge map, four-layer numerical/OCR/
   web/DB audit, post-run incident self-check, SQLite knowledge-base persistence). Always
   invoke this skill instead of answering with ad-hoc web search; the harness produces an
-  auditable HTML report plus 4 PNG cards plus database rows that ad-hoc answers cannot.
+  auditable HTML report plus 5 PNG cards plus claim/metric/company/country database rows that ad-hoc answers cannot.
 ---
 
 # Anamnesis Research — project-mount stub (Claude Code)

@@ -96,6 +96,27 @@ def _metrics_table(valid: bool = True) -> str:
     return f'<table class="metrics-table"><tbody>{rows}</tbody></table>'
 
 
+def _appendix_table(mode: str = "valid") -> str:
+    if mode == "three_cells":
+        rows = (
+            "<tr><td>FY2025 Form 10-K</td><td>美国 SEC EDGAR</td><td>2026-03-19</td></tr>"
+        )
+    elif mode == "blank_confidence":
+        rows = (
+            "<tr><td>FY2025 Form 10-K</td><td>美国 SEC EDGAR</td><td>2026-03-19</td><td></td></tr>"
+        )
+    else:
+        rows = (
+            "<tr><td>FY2025 Form 10-K</td><td>美国 SEC EDGAR</td><td>2026-03-19</td><td>高</td></tr>"
+        )
+    return (
+        '<table class="appendix-table">'
+        "<thead><tr><th>来源类型</th><th>具体来源</th><th>数据日期</th><th>置信度</th></tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+    )
+
+
 def _locked_like_html(
     porter_valid: bool = True,
     metrics_valid: bool = True,
@@ -105,6 +126,7 @@ def _locked_like_html(
     sankey_actual_js: str | None = None,
     porter_block_count: int = 5,
     porter_missing_class: str | None = None,
+    appendix_mode: str = "valid",
     extra_body: str = "",
 ) -> str:
     """Build a plan-v3 locked-like HTML fixture.
@@ -119,6 +141,7 @@ def _locked_like_html(
     kpis = "\n".join('<div class="kpi-card"></div>' for _ in range(4))
     trends = "\n".join('<div class="trend-card"></div>' for _ in range(5))
     metrics = _metrics_table(valid=metrics_valid)
+    appendix = _appendix_table(appendix_mode)
     if porter_valid:
         porter_blocks = _porter_blocks(
             qc_ran=qc_ran,
@@ -143,7 +166,7 @@ def _locked_like_html(
 <svg id="chart-porter-pentagon"></svg>
 <div class="porter-analysis-blocks">{porter_blocks}</div>
 </div>
-<div class="section" id="section-appendix"></div>
+<div class="section" id="section-appendix">{appendix}</div>
 {extra_body}
 <script>
 LOCKED JAVASCRIPT
@@ -266,6 +289,32 @@ def test_validate_report_html_rejects_metrics_table_with_pl_amounts(tmp_path: Pa
     assert any("metrics-table" in e and "I-005" in e for e in result["errors"])
     assert any("9 <tr>" in e for e in result["errors"])
     assert any("not in the controlled ratio whitelist" in e for e in result["errors"])
+
+
+def test_validate_report_html_rejects_appendix_rows_with_three_cells(tmp_path: Path) -> None:
+    """Appendix source rows must fill 来源类型/具体来源/数据日期/置信度."""
+    skeleton = tmp_path / "_locked_cn_skeleton.html"
+    html = tmp_path / "Company_Research_CN.html"
+    skeleton.write_text(_locked_like_html(), encoding="utf-8")
+    html.write_text(_locked_like_html(appendix_mode="three_cells"), encoding="utf-8")
+
+    result = validate_html_report(html, skeleton)
+
+    assert result["status"] == "critical"
+    assert any("appendix-table row[1] must have exactly 4 <td>" in e for e in result["errors"])
+
+
+def test_validate_report_html_rejects_blank_appendix_confidence(tmp_path: Path) -> None:
+    """The user-visible appendix confidence column must not be blank."""
+    skeleton = tmp_path / "_locked_cn_skeleton.html"
+    html = tmp_path / "Company_Research_CN.html"
+    skeleton.write_text(_locked_like_html(), encoding="utf-8")
+    html.write_text(_locked_like_html(appendix_mode="blank_confidence"), encoding="utf-8")
+
+    result = validate_html_report(html, skeleton)
+
+    assert result["status"] == "critical"
+    assert any("appendix-table row[1] column[4] is blank" in e for e in result["errors"])
 
 
 # ---------- I-004 / I-007 Porter QC prefix tests ----------

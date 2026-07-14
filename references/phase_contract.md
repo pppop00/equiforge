@@ -42,9 +42,9 @@ The prose below uses dotted shorthand (P1.5, P3.6, P5.7) that maps to canonical 
 | P9 — layout fill | `P9_layout` |
 | P10 — Validator 1 | `P10_validator1` |
 | P10.5 — Validator 2 | `P10_5_validator2` |
-| P10.6 — Cards 1-4 analyst-content gate (plan v3) | `P10_6_voice_gate` |
+| P10.6 — Cards 1-5 claim-evidence gate (schema v5) | `P10_6_voice_gate` |
 | P10.7 — red team cards | `P10_7_RED_TEAM` |
-| P11 — render four PNGs | `P11_render` |
+| P11 — render five PNGs | `P11_render` |
 | P12 — final audit (paying-customer gate) | `P12_final_audit` |
 | Incident post-check | `P_INCIDENT_POSTCHECK` |
 | DB index | `P_DB_INDEX` |
@@ -74,9 +74,9 @@ P_INCIDENT_PRECHECK ★
   → P9 layout fill (char/pixel budgets)
   → P10 Validator 1 (tools/photo/validate_cards.py)
   → P10.5 Validator 2 (web fact-check; loops back to P10 ≤3×)
-  → P10.6 voice gate (Cards 1-4 analyst substrate + worker notes)
+  → P10.6 evidence gate (Cards 1-5 claim provenance + metric basis)
   → P10.7 RED TEAM ★ (numeric + narrative attackers, parallel; pre-render; cap=1 loop)
-  → P11 render 4 PNGs (2160×2700)
+  → P11 render 5 PNGs (2160×2700)
   → P12 final audit: reconcile + OCR + web third + DB cross  ★ paying-customer gate
   → P_INCIDENT_POSTCHECK ★ (re-read INCIDENTS.md; flagged blocks DB write)
   → P_DB_INDEX writes everything into db/equity_kb.sqlite
@@ -132,18 +132,18 @@ Delegated to subagents under `skills_repo/er/agents/`. The orchestrator's job is
 ## P7–P10.7 — card pipeline + adversarial review (EP)
 
 - **P7 logo**: hard rule — create the per-run `cards/` directory **first**, save `logo_official.png` into it, set `logo_asset_path` to that absolute path, only then proceed. Order matters; see `MEMORY.md`.
-- **P8 content**: produces `cards/{stem}.card_slots.json` per the schema v3 keys (`cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc`, `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens`, plus `logo_asset_path` set at P7). The `cfa_lens` block in v3 must include `formula` (real formula with `=`) and `company_calculation` (1-3 lines, ≥1 digit); the pre-v3 `cfa_lens.takeaway` slot is gone.
+- **P8 content**: produces schema-v5 `cards/{stem}.card_slots.json` plus `cards/{stem}.card_slots_worker_notes.json`. Card 1 uses `one_minute_summary` with two separately aligned variables. Card 2 uses four ordered `background_bullets` objects (`external_condition`, `transmission`, `company_outcome`, `watch_signal`) followed by five Porter evidence entries. Cards 3–5 use `five_year_arc` / `financial_metrics_panel`, `company_quality`, and `country_lens`. `cfa_lens` is forbidden on the active path; `logo_asset_path` was set at P7.
 - **P8.5 hardcode audit**: every sentence has a company-specific anchor; no boilerplate.
 - **P9 layout**: compress to char/pixel budgets — do not invent facts.
 - **P10 Validator 1**: `python tools/photo/validate_cards.py`. Exit 0 required.
 - **P10.5 Validator 2**: web fact-check. Any change to `card_slots.json` → rerun P10. Loop cap 3.
-- **P10.6 voice gate**: deterministic Cards 1-4 analyst-content gate. Requires `cards/{stem}.card_slots_worker_notes.json` beside `card_slots.json`; failure blocks P10.7, P11, and DB index.
+- **P10.6 evidence gate**: deterministic Cards 1-5 claim-level gate. Requires `cards/{stem}.card_slots_worker_notes.json` beside schema-v5 slots and validates claim type/source/date plus calculation basis and falsifier fields; failure blocks P10.7, P11, and DB index.
 - **P10.7 RED TEAM** ★: **fires before P11 render — cards do not yet exist as PNGs.** Inputs at `meta/red_team/P10_7_RED_TEAM.input.json` cover the `card_slots.json` file, the source `research/*.json`, `cards/validator{1,2}_report.json`, and the upstream P5.7 red-team outputs. The attacker contracts at this phase are **pre-render only**:
   - **Numeric attacker** — checks source-chain integrity, basis/units, tolerance compliance against source JSONs, and *render-budget realizability* (will the value as written fit the card's pixel/char budget without truncation; will rounding shift change reader meaning). It does **not** OCR anything — there is nothing rendered to OCR yet.
-  - **Narrative attacker** — checks Porter-score directionality, hidden assumptions, missing counter-evidence, cross-card narrative coherence, and locked-template integrity carry-over.
+  - **Narrative attacker** — checks the Card 2 causal-chain order, Porter-score directionality, hidden assumptions, missing counter-evidence, cross-card narrative coherence, and locked-template integrity carry-over.
 
   Outputs at `validation/red_team_numeric_P10_7_RED_TEAM.json` and `validation/red_team_narrative_P10_7_RED_TEAM.json`. **Loop rule**: `summary.critical > 0` from either attacker → loop back once to `P9_layout` (or `P8_content` if the defect is content-level rather than layout-level). Red-team retry cap = 1. A second critical = halt. Actual PNG OCR remains P12 layer 2.
-- **P11 render**: 4 PNGs (`01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_cfa_lens.png`) at 2160×2700, palette = `P0_palette`. If `USER.md:cfa_progress` is set, it is passed through as `--cfa-progress` to EP's renderer so the Card 4 CFA-concept selection matches what the voice gate (P10.6) saw.
+- **P11 render**: 5 PNGs (`01_cover.png`, `02_porter.png`, `03_five_year_financials.png`, `04_company_quality.png`, `05_country_lens.png`) at 2160×2700, palette = `P0_palette`.
 
 ## P12 — paying-customer audit ★
 
@@ -152,7 +152,7 @@ Layers in order, via `agents/post_card_auditor.md`:
 | Layer | Tool | Fail blocks? |
 |---|---|---|
 | 1. Numerical reconciliation | `tools/audit/reconcile_numbers.py` | yes |
-| 2. OCR over the 4 PNGs | `tools/audit/ocr_cards.py` | yes |
+| 2. OCR over the 5 PNGs | `tools/audit/ocr_cards.py` | yes |
 | 3. Web third-check (top-3 numbers) | `tools/audit/web_third_check.py` | no — emits a `pending` envelope; aggregator downgrades to `warn` if the envelope is still unfilled at audit time. See `workflow_meta.json` envelope_note. **Do not claim Top-3 was verified if you did not actually fill the envelope.** |
 | 4. DB cross-validate | `tools/audit/db_cross_validate.py` | no (cold-start OK) |
 | 5. User-Agent PII guard | `tools/audit/user_agent_pii.py` | yes |

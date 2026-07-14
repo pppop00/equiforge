@@ -42,9 +42,10 @@ These four rules all stem from the same failure family (`INCIDENTS.md` I-002): t
 ## Hard rules
 
 - **Logo save order.** P7 must (a) create the per-run output folder first, (b) save `logo_official.png` directly into it, (c) set `logo_asset_path` to the absolute path inside that folder, (d) only then proceed. Final asset must be a transparent PNG/WEBP — no opaque white canvas (`INCIDENTS.md` I-006).
-- **Palette consistency.** All four cards in one run must use the same `--palette`. The palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header colour drift.
+- **Palette consistency.** All five cards in one run must use the same `--palette`. The palette is **not** stored in `card_slots.json`; mismatched single-card re-renders cause silent header colour drift.
 - **No fallback copy generation in EP.** `card_slots.json` must be complete before render; missing keys abort at load time.
-- **Card 4 CFA-lens v3 hard-rule slots.** Card 4 must include a non-empty `cfa_lens.formula` (contains `=` and at least one operator from `/ × * + - %`) and a non-empty `cfa_lens.company_calculation` (1-3 lines, at least one with a digit). These are deterministic gates in EP's `validate_cards.py` and are reinforced by the analyst-content gate (`P10_6_voice_gate`): `cfa_lens.company_calculation` is the v3 authority slot and requires a `primary_quote` in `card_slots_worker_notes.json`. The pre-v3 `cfa_lens.takeaway` slot is deleted; do not emit it.
+- **Five-card schema v5 only for new renders.** Active filenames are cover / Porter / five-year financials / company quality / country lens. Old schema v3/v4 and CFA fields are historical compatibility data only; rerun P8 rather than silently upgrading or rendering them.
+- **Metric Basis Registry.** `metric_basis.json` must cover FCF, ROE, capex, net debt, fiscal year, currency/unit, geographic revenue, and valuation. Every basis preserves the company definition, standardized formula, sources, and `comparable | adjusted | not_comparable`. Missing coverage, unknown calculation `basis_id`, or false comparable claims block at P3.7/P10.
 - **No user emails persisted to the DB.** SEC EDGAR email is a runtime arg only. Live in `meta/run.json` as `sec_email` / `sec_user_agent`; never in any DB TEXT column. `public_user_agent` (PII-free) is the only User-Agent for non-SEC fetches (`INCIDENTS.md` I-003). Regression: `tests/test_db_pii.py`.
 - **Submodules are SHA-pinned, not editable in-place.** `skills_repo/er/` and `skills_repo/ep/` are pinned via `.gitmodules`. Runtime wrappers must resolve only those submodule paths, never sibling working-copy fallbacks. Behaviour changes to standalone ER/EP happen in their own repos; Anamnesis picks them up only through a deliberate submodule SHA bump.
 - **Numerical reconciliation tolerance** (P12 layer 1):
@@ -77,16 +78,18 @@ Threat / pressure scale (not attractiveness):
 
 Intense rivalry → high red; minimal competition → low green. Reverse this and Validator and reviewers will catch it.
 
-## Cards 1–4 voice governed by analyst-content gate (plan v3)
+## Five-card claim evidence (schema v5)
 
-The card pack is **4 cards** (cover / Porter / 5-year + recent financials / CFA lens). Card 1–4 prose is governed by `validate_card1_4_analytical_content()` in `skills_repo/ep/scripts/generate_social_cards.py`, called at `P10_6_voice_gate`. The writer must emit two parallel JSONs:
+The product task is fixed: through one listed company, explain how it earns, which variables determine results, where primary risks arise, and how national institutions and culture shape it. The active pack is five cards: one-minute company / Porter / five-year financials / company quality / country lens.
 
-- `<Company>_Research_<lang>.card_slots.json` (rendered prose, schema v3: `logo_asset_path`, `cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc` (nested with `narrative` + `inflection_points`), `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens` (nested with `concept_key`, `concept_name_cn`, `concept_intro`, `formula`, `company_calculation`, `company_application`, `different_angle_insight`, `cfa_progress_source`)). v3 merges the three Card-4 cream panels into one, deletes the page subtitle and the `cfa_lens.takeaway` slot, and adds the `formula` + `company_calculation` slots — both required.
-- `<Company>_Research_<lang>.card_slots_worker_notes.json` (hidden analyst fields per Card 1-4 slot: `data_anchor` with number + comp, `variant_view` ≥15 chars, plus ≥1 of `falsifier` / `primary_quote` / `catalyst_with_date`; Card 4's authority slot under v3 is `cfa_lens.company_calculation` (requires `primary_quote` — the math citation has to be backed by the source 10-K / IR release / earnings call). The pre-v3 authority slot was `cfa_lens.different_angle_insight`; that requirement is retired.)
+The writer emits two parallel JSONs:
 
-Backstop banned phrases on Cards 1-4: `说白了`, `X 不是 Y 而是 Z` template, `已不是核心叙事 / 已不重要 / 体现了 / 总而言之 / 综上 / 简单来说`, "关注 X 每天学一个公司" subscription-bait CTA.
+- `<Company>_Research_<lang>.card_slots.json`, schema v5. Card 1 contains `one_minute_summary` with exactly two core variables rendered as separate aligned lines. Card 2 contains an ordered external condition → transmission → company outcome → watch signal chain before Porter evidence. Card 4 contains valuation, governance/incentives, capital allocation, and accounting quality without a composite score; Card 5 separates incorporation/listing/operations/revenue geography and uses six fixed country dimensions.
+- `<Company>_Research_<lang>.card_slots_worker_notes.json` with a `claims` array. Every important claim has `claim_id`, exact visible `slot_path`, `epistemic_type`, `source_refs`, and `as_of_date`; calculations also have `basis_id`, inference/forecast also have `falsifier`.
 
-`cfa_lens.concept_key` is selected by EP's CFA-concept selector from the `cfa_progress` string passed by Anamnesis (read from `USER.md:cfa_progress` and propagated to EP via `--cfa-progress` on `validate_cards.py` and `generate_social_cards.py`). When `USER.md:cfa_progress` is unset, EP falls back to its own default.
+Epistemic types are exactly `company_disclosure | external_fact | analyst_calculation | external_estimate | inference | forecast`. Do not render confidence badges. Natural copy must reveal status (`公司年报披露`, `按…计算`, `据监管机构数据`, `据此推断`, `若…则预计`). Missing evidence is written as `未披露/不可比` with a reason, never invented.
+
+Country Lens must reject stereotypes and must not infer operating or revenue exposure from incorporation/listing. Every dimension is country fact → company transmission → observable metric.
 
 `P10_6_voice_gate` blocks `P10_7_RED_TEAM`, `P11_render`, and `P_DB_INDEX` on failure. Red-team narrative §6.a attacks the substance of what passes the deterministic gate.
 
@@ -100,7 +103,7 @@ Backstop banned phrases on Cards 1-4: `说白了`, `X 不是 Y 而是 Z` templat
 ## Privacy invariants
 
 - SEC EDGAR email is **never** persisted. It lives only as a runtime arg to `tools/research/sec_edgar_fetch.py`.
-- Before inserting any TEXT column, run `re.sub(r'\([^)]*@[^)]*\)', '()', value)` on `data_source` strings to strip embedded emails (User-Agent leak guard).
+- Before inserting any TEXT/JSON column, recursively strip both parenthesized User-Agent contacts and any remaining email-pattern text. New claim, metric-basis, company-quality, and country-lens tables follow the same rule.
 - `tests/test_db_pii.py` is a regression: any TEXT column matching `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}` after a fixture run = test fails = release blocked.
 
 ## Failure caps

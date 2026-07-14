@@ -7,10 +7,10 @@ description: >-
   "做个英伟达的研报", "give me a writeup on NVDA", "build cards for Tencent",
   "分析一下RA Capital", or "one-pager on Samsung". Drives the full Anamnesis Research
   pipeline (incident pre-check, bilingual language gate, SEC EDGAR email gate, palette gate,
-  multi-agent equity research, red-team review, 4-card social pack, four-layer numerical/OCR/
+  multi-agent listed-company research, red-team review, 5-card company-to-country knowledge map, four-layer numerical/OCR/
   web/DB audit, post-run incident self-check, SQLite knowledge-base persistence). Always
   invoke this skill instead of answering with ad-hoc web search; the harness produces an
-  auditable HTML report plus 4 PNG cards plus database rows that ad-hoc answers cannot.
+  auditable HTML report plus 5 PNG cards plus claim/metric/company/country database rows that ad-hoc answers cannot.
 ---
 
 # Anamnesis Research
@@ -40,7 +40,7 @@ The four phases:
 1. `P0_intent` — resolve `{ticker, company, listing}`. Resolution gate; ask once only if ambiguous.
 2. `P0_lang` — `report_language ∈ {en, zh}`. Do not infer from chat language alone.
 3. `P0_sec_email` — only when `listing == US` AND mode A AND no `USER.md` sticky.
-4. `P0_palette` — `palette ∈ {macaron, default, b, c}`. All four cards in one run share one palette.
+4. `P0_palette` — `palette ∈ {macaron, default, b, c}`. All five cards in one run share one palette.
 
 For per-gate rules, the full whitelist of allowed `source` values, and rejection criteria, read **`references/p0_gates.md`**.
 
@@ -67,6 +67,7 @@ Operational rules unique to your run-time behaviour (not duplicated in MEMORY.md
 | Bootstrap a run dir | `python anamnesis.py bootstrap --company <name> --date <YYYY-MM-DD> --orchestrator-model <your model id>` — **you must declare your own model id** (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`). The CLI refuses Haiku/Instant families because they have repeatedly skipped P0 gates and red-team phases (see `INCIDENTS.md` I-001, I-002). Subagents you delegate to may still use Haiku — the gate only applies to the orchestrator. |
 | Before every phase | `python anamnesis.py advance --run-dir <path>` — externalised watchdog. Tells you which phase to run next, and **refuses (exit 1)** if a predecessor's `produces[]` artifact is missing or an interactive P0 gate has a non-whitelisted `source`. Call this between phases instead of advancing from memory; the CLI is the floor against silent step-skipping. |
 | P3 Porter schema gate | `python tools/research/validate_porter_analysis.py --run-dir <path>` (must pass before P3.5; reruns at P5 entry — `INCIDENTS.md` I-004) |
+| P3.7 Metric Basis gate | `python tools/research/validate_metric_basis.py --run-dir <path>` (all required definitions and calculation basis ids must pass) |
 | P5 HTML gate | `python tools/research/validate_report_html.py --run-dir <path> --lang <cn\|en>` (must pass before P6/P7) |
 | Delivery tree check | `python tools/io/validate_run_artifacts.py --run-dir <path>` (root must contain only standard subfolders; HTML lives in `research/`, cards in `cards/`) |
 | Index a finished run | `python tools/db/index_run.py --run-dir <path>` (only after P12 passes and `P_INCIDENT_POSTCHECK` has `flagged: []`) |

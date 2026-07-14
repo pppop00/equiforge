@@ -30,7 +30,8 @@ EXPECTED_CARD_FILES = (
     "01_cover.png",
     "02_porter.png",
     "03_five_year_financials.png",
-    "04_cfa_lens.png",
+    "04_company_quality.png",
+    "05_country_lens.png",
 )
 FULL_RENDER_SIZE = (2160, 2700)
 LOGICAL_RENDER_SIZE = (1080, 1350)
@@ -91,10 +92,6 @@ def main(argv: list[str] | None = None) -> int:
                    help="Export 1080x1350 instead of 2160x2700.")
     p.add_argument("--no-copy-slots", action="store_true",
                    help="Do not copy card_slots.json into the output dir.")
-    p.add_argument("--cfa-progress", default=None,
-                   help="CFA progress string (e.g. 'Level 2 - Fixed Income - Binomial Tree'). "
-                        "Read from USER.md:cfa_progress by the orchestrator and passed through "
-                        "to EP's renderer for Card 4 CFA-lens selection.")
     args = p.parse_args(argv)
 
     ep_root = find_skill_root("ep")
@@ -114,9 +111,6 @@ def main(argv: list[str] | None = None) -> int:
         cmd.append("--export-logical-size")
     if args.no_copy_slots:
         cmd.append("--no-copy-slots")
-    if args.cfa_progress:
-        cmd.extend(["--cfa-progress", args.cfa_progress])
-
     if final_output_root is None:
         result = subprocess.run(cmd, cwd=str(ep_root), capture_output=True, text=True, check=False)
         sys.stdout.write(result.stdout)

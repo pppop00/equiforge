@@ -159,6 +159,30 @@ Institutional memory of failure. Each entry is a real incident + the load-bearin
 
 ---
 
+## I-011 — Appendix source table confidence column left blank
+
+- **Date observed:** 2026-06-01
+- **Phase:** `P5_html` / `P5_html_gate`
+- **What happened:** In run `output/Kohls_2026-06-01_ecabe57e`, `research/Kohls_Research_CN.html` rendered the appendix source table with a four-column header (`来源类型 / 具体来源 / 数据日期 / 置信度`) but each `APPENDIX_SOURCE_ROWS` row initially had only three `<td>` cells. The user-visible `置信度` column was blank, and long source URLs were incorrectly placed under the data-date column.
+- **Root cause:** The writer treated `{{APPENDIX_SOURCE_ROWS}}` as free-form table rows and did not follow the locked table's four-column schema. `tools/research/validate_report_html.py` had no appendix-table row-shape or empty-cell gate, so the report passed `P5_html_gate` despite the visible blank column.
+- **Rule (load-bearing):** Appendix source rows must match the locked table exactly: four non-empty cells per row, ordered `来源类型 / 具体来源 / 数据日期 / 置信度`. The confidence cell must use a controlled value (`高 / 中等 / 低` or English equivalents). URLs must not displace the data-date or confidence columns.
+- **Detection:** `tools/research/validate_report_html.py` parses `#section-appendix table.appendix-table`, requires exactly four `<th>`, at least one `<tr>`, exactly four `<td>` per row, no blank cells, and controlled confidence vocabulary. Regression tests: `tests/test_validate_report_html.py::test_validate_report_html_rejects_appendix_rows_with_three_cells` and `tests/test_validate_report_html.py::test_validate_report_html_rejects_blank_appendix_confidence`.
+- **Related contract:** `skills_repo/er/agents/report_writer_cn.md` `{{APPENDIX_SOURCE_ROWS}}`; `tools/research/validate_report_html.py`; `tests/test_validate_report_html.py`; `INCIDENTS.md` I-005 and I-008.
+
+---
+
+## I-012 — Card 4 formula substitution omitted denominator and result
+
+- **Date observed:** 2026-06-01
+- **Phase:** `P8_content` / `P10_validator1` / `P11_render`
+- **What happened:** In run `output/Kohls_2026-06-01_ecabe57e`, Card 4 used the formula `自由现金流收益率 = 自由现金流 / 市值`, but `cards/Kohls_Research_CN.card_slots.json -> cfa_lens.company_calculation` initially rendered only `2025 财年自由现金流约 10 亿美元。` The denominator (`市值`) and computed result (`10/15≈67%`) were absent from `cards/04_cfa_lens.png`, so the calculation did not actually instantiate the displayed formula even though Validator 1 and OCR could pass.
+- **Root cause:** The existing Card 4 gate checked only that `cfa_lens.formula` contained an equals sign/operator and that `cfa_lens.company_calculation` contained at least one digit. It did not verify that all formula variables, operands, and the computed result were present in the company calculation. The operator also compressed the calculation to improve OCR stability, accidentally dropping the denominator and result.
+- **Rule (load-bearing):** Card 4 `company_calculation` must plug the formula, not merely cite one input. If the formula divides by market cap / equity value / `市值`, the calculation must include the numerator, the denominator, and the resulting yield/percentage. Equivalent formula families need the same variable-substitution standard: every visible formula variable must be represented by a company-specific numeric operand or explicitly marked unavailable.
+- **Detection:** `tools/photo/validate_cards.py` adds an Anamnesis wrapper gate: for market-cap division formulas, `cfa_lens.company_calculation` must mention `市值` / `market cap` / `equity value`, contain at least two numeric operands, and show the computed yield/result (`%`, `收益率`, or `yield`). Regression test: `tests/test_photo_wrappers.py::test_validator1_fails_market_cap_formula_without_denominator`.
+- **Related contract:** `MEMORY.md` §"Card 4 CFA-lens v3 hard-rule slots"; `skills_repo/ep/scripts/generate_social_cards.py` `assert_card_slots_complete()` / `validate_report()` / `card_4_cfa()`; `tools/photo/validate_cards.py`; `tests/test_photo_wrappers.py`; `INCIDENTS.md` I-009 and I-010.
+
+---
+
 ## How this file is used
 
 1. **Pre-run** (`P_INCIDENT_PRECHECK`, before `P0_intent`): orchestrator reads end-to-end. For each incident it confirms the rule is wired into the current plan and logs `incident_precheck.acknowledged` to `meta/run.jsonl`. Novel-looking matches against the current target raise the bar in downstream phases.

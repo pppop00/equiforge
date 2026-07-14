@@ -133,8 +133,36 @@ def _seed_run_dir(tmp_path: Path) -> Path:
     return rd
 
 
+def _seed_v5_artifacts(rd: Path) -> None:
+    source = [{"publisher": "IR real.user@example.com", "url": "https://example.com"}]
+    bases = []
+    for key in ("fcf", "roe", "capex", "net_debt", "fiscal_year", "currency_unit", "geographic_revenue", "valuation"):
+        bases.append({
+            "basis_id": f"{key}.official", "metric_key": key, "company_label": key,
+            "company_definition": "definition real.user@example.com", "standardized_formula": f"normalize({key})",
+            "period": "FY2026", "currency": "USD", "unit": "billion",
+            "comparability": "comparable", "source_refs": source,
+        })
+    (rd / "research" / "metric_basis.json").write_text(json.dumps({"schema_version": 1, "bases": bases}), encoding="utf-8")
+    panels = {
+        key: {"finding": "finding real.user@example.com", "evidence": "evidence", "watch_item": "watch", "status": "supported", "source_refs": source}
+        for key in ("valuation", "governance_incentives", "capital_allocation", "accounting_quality")
+    }
+    (rd / "research" / "company_quality.json").write_text(json.dumps({"as_of_date": "2026-04-28", **panels}), encoding="utf-8")
+    (rd / "research" / "country_lens.json").write_text(json.dumps({
+        "as_of_date": "2026-04-28",
+        "dimensions": [{"key": "tax", "country_fact": "fact real.user@example.com", "company_transmission": "transmission", "watch_metric": "rate", "status": "supported", "source_refs": source}],
+    }), encoding="utf-8")
+    cards = rd / "cards"
+    (cards / "Apple_Research_CN.card_slots.json").write_text(json.dumps({"schema_version": 5, "one_minute_summary": {"business_model": "model"}}), encoding="utf-8")
+    (cards / "Apple_Research_CN.card_slots_worker_notes.json").write_text(json.dumps({
+        "claims": [{"claim_id": "c1", "slot_path": "one_minute_summary.business_model", "epistemic_type": "analyst_calculation", "source_refs": source, "as_of_date": "2026-04-28", "basis_id": "fcf.official", "falsifier": "email real.user@example.com"}]
+    }), encoding="utf-8")
+
+
 def test_index_run_does_not_persist_email(tmp_path: Path) -> None:
     rd = _seed_run_dir(tmp_path)
+    _seed_v5_artifacts(rd)
     db_path = tmp_path / "kb.sqlite"
     migrate.apply_migrations(db_path)
     res = index_run.index_run(rd, db_path)
@@ -164,6 +192,7 @@ def test_index_run_does_not_persist_email(tmp_path: Path) -> None:
 
 def test_index_run_writes_expected_tables(tmp_path: Path) -> None:
     rd = _seed_run_dir(tmp_path)
+    _seed_v5_artifacts(rd)
     db_path = tmp_path / "kb.sqlite"
     migrate.apply_migrations(db_path)
     res = index_run.index_run(rd, db_path)
@@ -174,7 +203,9 @@ def test_index_run_writes_expected_tables(tmp_path: Path) -> None:
     try:
         for table in ("companies", "runs", "financials_period", "macro_factors_period",
                       "porter_scores_period", "intelligence_signals", "edge_insights",
-                      "disclosure_quirks", "qc_events"):
+                      "disclosure_quirks", "qc_events", "claim_evidence",
+                      "metric_basis_period", "company_quality_observations",
+                      "country_lens_observations"):
             n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             assert n >= 1, f"{table} empty (touched={res.tables_touched.get(table)})"
         assert conn.execute("SELECT COUNT(*) FROM porter_scores_period").fetchone()[0] == 15

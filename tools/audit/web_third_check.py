@@ -25,13 +25,15 @@ from _numerics import extract_numerics  # noqa: E402
 # Headline metric keys we want to re-verify in priority order
 PRIORITY_PATHS = [
     "card_slots.intro_sentence",
-    "card_slots.company_focus_paragraph",
-    "card_slots.cfa_lens.company_calculation",
-    "card_slots.cfa_lens.formula",
+    "card_slots.one_minute_summary",
+    "card_slots.company_quality.valuation",
+    "card_slots.company_quality.governance_incentives",
+    "card_slots.company_quality.accounting_quality",
+    "card_slots.country_lens.dimensions",
+    "card_slots.country_lens.top_warnings",
     "card_slots.metrics_row",
     "card_slots.industry_paragraph",
-    "card_slots.recent_financial_highlights",
-    "card_slots.revenue_explainer_points",
+    "card_slots.financial_metrics_panel",
     "card_slots.five_year_arc",
 ]
 

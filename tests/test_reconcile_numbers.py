@@ -24,6 +24,11 @@ def test_extract_numerics_pp_and_pct() -> None:
     assert "pp" in units
 
 
+def test_extract_numerics_keeps_cjk_currency_scale_before_currency_name() -> None:
+    toks = extract_numerics("归母净利润4330亿日元，自由现金流3.40万亿日元")
+    assert [(t.value, t.unit) for t in toks] == [(4330.0, "yi"), (3.40, "wanyi")]
+
+
 def test_within_tolerance_pct() -> None:
     a = NumericToken(raw="56.3%", value=56.3, unit="pct", context="")
     b = NumericToken(raw="56.5%", value=56.5, unit="pct", context="")

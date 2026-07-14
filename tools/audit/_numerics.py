@@ -18,9 +18,11 @@ NUMBER_RE = re.compile(r"(?<![A-Za-z\.])([+\-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[+\-
 UNIT_PATTERNS = [
     (re.compile(r"^(pp|个百分点|百分点)\b"), "pp"),
     (re.compile(r"^%"), "pct"),
-    (re.compile(r"^(亿美元|亿元|亿)\b"), "yi"),                # 0.01B = 1 yi
-    (re.compile(r"^(万亿|万亿元)\b"), "wanyi"),               # = 10000 yi
-    (re.compile(r"^(万|万元)\b"), "wan"),
+    # Do not use ``\b`` after CJK units: ``亿日元`` has no Unicode word
+    # boundary between 亿 and 日, but it is still an explicit currency scale.
+    (re.compile(r"^(亿美元|亿元|亿)"), "yi"),                # 0.01B = 1 yi
+    (re.compile(r"^(万亿元|万亿)"), "wanyi"),               # = 10000 yi
+    (re.compile(r"^(万元|万)"), "wan"),
     (re.compile(r"^(billion|bn|B)\b", re.I), "billion"),
     (re.compile(r"^(million|mn|M)\b", re.I), "million"),
     (re.compile(r"^(倍|x|×)\b"), "x"),

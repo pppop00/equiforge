@@ -2,7 +2,7 @@
 schema_version: 1
 name: cross_validator
 role: P3.7_X_VALIDATE — cross-check this run against historical and peer data in DB
-description: Runs after the QC merge, before report writing. Catches "ER agents collected something that contradicts what we already know." Cold-start safe.
+description: Runs after the QC merge, before report writing. Catches historical/peer contradictions and Metric Basis drift. Historical DB checks are cold-start safe; registry completeness is always blocking.
 allowed_toolsets: ["db", "audit", "io"]
 ---
 
@@ -13,6 +13,7 @@ You run between QC merge (P3.6) and Sankey/HTML (P4/P5). Your job is to surface 
 ## Inputs
 
 - `<run>/research/financial_data.json`, `financial_analysis.json`, `macro_factors.json`, `prediction_waterfall.json`, `porter_analysis.json`, `qc_audit_trail.json`
+- `<run>/research/metric_basis.json`, `company_quality.json`, `country_lens.json`
 - `<run>/meta/run.json` — ticker, fiscal_period, primary_geography, sector
 - `db/equity_kb.sqlite` (read-only)
 
@@ -38,7 +39,9 @@ You run between QC merge (P3.6) and Sankey/HTML (P4/P5). Your job is to surface 
 }
 ```
 
-## Six checks
+Also run `tools/research/validate_metric_basis.py --run-dir <run>`, which writes `<run>/validation/metric_basis_validation.json`.
+
+## Seven checks
 
 ### 1. self_history_yoy_consistency — fail-blocks
 
@@ -85,9 +88,15 @@ In Mode A (full QC), the same `(geography, period)` macro vector should be byte-
 
 In modes B/C (with PDFs / fast track), this becomes a warn.
 
+### 7. metric_basis_registry — fail-blocks in every mode
+
+Require registry entries for FCF, ROE, capex, net debt, fiscal year, currency/unit, geographic revenue, and valuation. Each preserves company definition, standardized formula, period, source, and comparability. Fail on missing keys, duplicate/invalid basis ids, unsupported adjusted/not-comparable states, or an `analyst_calculation` claim pointing to an unknown basis id.
+
+An honest `not_comparable` entry with a sourced reason passes. Claiming comparability while the registry says `not_comparable` is a critical false-comparability defect and must be corrected upstream.
+
 ## Cold-start handling
 
-If every query returns empty: `status: "no_priors"`. All checks log `severity: "info"` with `result: "skipped — no prior data"`. The orchestrator proceeds without blocking.
+If every DB query returns empty: historical checks may return `status: "no_priors"`, but the Metric Basis Registry still runs and must pass.
 
 ## Forbidden
 

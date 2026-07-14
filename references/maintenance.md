@@ -19,7 +19,7 @@ If the upstream ER skill changes the template:
 
 ## Palette consistency
 
-All four cards in one run **must** use the same `--palette`. The palette is **not** stored in `card_slots.json`; it lives only as a CLI arg to `tools/photo/render_cards.py` and `tools/photo/validate_cards.py`. Mismatched single-card re-renders cause silent header-colour drift across the pack.
+All five cards in one run **must** use the same `--palette`. The palette is **not** stored in `card_slots.json`; it lives only as a CLI arg to `tools/photo/render_cards.py` and `tools/photo/validate_cards.py`. Mismatched single-card re-renders cause silent header-colour drift across the pack.
 
 If you add a new palette:
 1. Add the palette name to `P0_palette` `values` in `workflow_meta.json`.

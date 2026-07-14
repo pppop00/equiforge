@@ -108,6 +108,39 @@ def test_validator1_writes_fail_report_with_issues(
     assert "palette: drift" in report["issues"]
 
 
+def test_validator1_fails_market_cap_formula_without_denominator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools.photo import validate_cards as wrapper
+    rd = _seed_run(tmp_path)
+    slots = _seed_slots(rd, with_worker_notes=False)
+    slots.write_text(json.dumps({
+        "cover_company_name_cn": "科尔士",
+        "cfa_lens": {
+            "formula": "自由现金流收益率 = 自由现金流 / 市值",
+            "company_calculation": ["2025 财年自由现金流约 10 亿美元。"],
+        },
+    }, ensure_ascii=False), encoding="utf-8")
+    html = rd / "research" / "Apple_Research_CN.html"
+    html.parent.mkdir(parents=True, exist_ok=True)
+    html.write_text("<html></html>")
+
+    monkeypatch.setattr(wrapper, "find_skill_root", lambda *_: tmp_path)
+    monkeypatch.setattr(wrapper, "script_path", lambda *a: tmp_path / "fake_ep.py")
+    monkeypatch.setattr(wrapper, "python_exec", lambda: "python3")
+    monkeypatch.setattr(wrapper.subprocess, "run", lambda *a, **k: _fake_ep_run(0))
+
+    rc = wrapper.main([
+        "--input", str(html), "--slots", str(slots), "--palette", "macaron",
+    ])
+
+    assert rc == 1
+    report = json.loads((slots.parent / "validator1_report.json").read_text())
+    assert report["status"] == "fail"
+    assert report["ep_exit_code"] == 0
+    assert any("市值 / market cap" in issue for issue in report["issues"])
+
+
 # ---- voice_gate wrapper -----------------------------------------------------
 
 

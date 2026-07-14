@@ -1,7 +1,7 @@
 """Validate and optionally normalize a per-run artifact directory.
 
 The run-dir root is an index, not a dumping ground. Customer-facing deliverables
-are the HTML report under research/ and the four PNG cards under cards/. All JSON
+are the HTML report under research/ and the five PNG cards under cards/. All JSON
 contracts, gates, logs, and DB summaries must live in their phase subfolders.
 
 Usage:

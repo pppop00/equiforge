@@ -23,7 +23,7 @@ One run directory at `output/{Company}_{Date}_{RunID}/` with the structure descr
 
 The root of the run directory is only an index. Do not write phase artifacts directly into it. Customer-facing deliverables are:
 - `research/{Company}_Research_{CN|EN}.html`
-- `cards/01_cover.png`, `cards/02_porter.png`, `cards/03_five_year_financials.png`, `cards/04_cfa_lens.png`
+- `cards/01_cover.png`, `cards/02_porter.png`, `cards/03_five_year_financials.png`, `cards/04_company_quality.png`, `cards/05_country_lens.png`
 
 All JSON contracts, gates, logs, and DB summaries must stay in their subfolders (`meta/`, `research/`, `cards/`, `validation/`, `db_export/`, `logs/`). If a phase accidentally writes root-level JSON/HTML/PNG files, run `python tools/io/validate_run_artifacts.py --run-dir <run_dir> --fix` before handoff, then rerun it without `--fix`; exit 0 is required for a clean delivery tree.
 
@@ -42,7 +42,7 @@ The prose below uses the dotted shorthand (P1, P1.5, P2.6, P5.7, …) that maps 
 | P0 — DB precheck | `P0_DB_PRECHECK` |
 | P1 — parallel research | `P1_parallel_research` |
 | P1.5 — edge insight | `P1_5_edge` |
-| P2 — financial analysis + waterfall + Sankey (consolidated) | `P2_analysis` |
+| P2 — analysis + waterfall + Sankey + company/country normalization | `P2_analysis` |
 | P2.6 — macro QC peers | `P2_6_qc_macro` |
 | P3 — Porter analysis | `P3_porter` |
 | P3.5 — Porter QC peers | `P3_5_qc_porter` |
@@ -60,9 +60,9 @@ The prose below uses the dotted shorthand (P1, P1.5, P2.6, P5.7, …) that maps 
 | P9 — layout fill | `P9_layout` |
 | P10 — Validator 1 | `P10_validator1` |
 | P10.5 — Validator 2 | `P10_5_validator2` |
-| P10.6 — Cards 1-4 analyst-content gate (plan v3) | `P10_6_voice_gate` |
+| P10.6 — Cards 1-5 claim-evidence gate (schema v5) | `P10_6_voice_gate` |
 | P10.7 — red team cards | `P10_7_RED_TEAM` |
-| P11 — render four PNGs | `P11_render` |
+| P11 — render five PNGs | `P11_render` |
 | P12 — final audit (paying-customer gate) | `P12_final_audit` |
 | Post-check | `P_INCIDENT_POSTCHECK` |
 | DB index | `P_DB_INDEX` |
@@ -129,20 +129,21 @@ This phase never blocks; cold start = empty results = downstream proceeds normal
 
 ### 8. P1 — parallel research
 
-Delegate to **three subagents simultaneously**, with a concurrency cap of 3 (per `workflow_meta.json`):
+Schedule **four research jobs** with a hard concurrency cap of 3 (per `workflow_meta.json`):
 - `skills_repo/er/agents/financial_data_collector.md` — pass it the prior_financials list so it knows which periods are already covered.
 - `skills_repo/er/agents/macro_scanner.md` — if `get_macro_snapshot` returned a row, pass it as input and tell the agent to reuse instead of re-collecting.
 - `skills_repo/er/agents/news_researcher.md` — pass it the peer_companies list so cross-references can name peers.
+- `skills_repo/er/agents/company_context_researcher.md` — collect valuation time point, governance/incentives, capital allocation, accounting quality, the four-part exposure map, and authoritative country evidence.
 
-Each subagent receives a fresh context with only the toolsets listed in its frontmatter (or `references/subagent_toolsets.md` as the cross-check). Wait for all three to complete; on any failure, retry that one once with the same prompt.
+Each subagent receives a fresh context with only the toolsets listed in its frontmatter (or `references/subagent_toolsets.md` as the cross-check). Start the fourth when one of the first three frees a slot. Wait for all four; never exceed concurrency 3.
 
-Outputs land at `research/financial_data.json`, `research/macro_factors.json`, `research/news_intel.json`.
+Outputs land at `research/financial_data.json`, `research/macro_factors.json`, `research/news_intel.json`, and `research/company_context_research.json`.
 
 ### 9. P1.5 — edge insight
 
-Sequential. Delegate to `skills_repo/er/agents/edge_insight_writer.md` with all three P1 outputs as input. Output: `research/edge_insights.json`.
+Sequential. Delegate to `skills_repo/er/agents/edge_insight_writer.md` with financial and news inputs (plus context evidence where relevant). Output: `research/edge_insights.json`.
 
-### 10. P2_analysis — analysis + waterfall + Sankey (consolidated)
+### 10. P2_analysis — analysis + waterfall + Sankey + context normalization
 
 Run inline as one phase (these were P2_fin_analysis / P2_5_waterfall / P4_sankey before consolidation; they always ran in lock-step and produced linked artifacts). Internal order:
 
@@ -150,7 +151,7 @@ Run inline as one phase (these were P2_fin_analysis / P2_5_waterfall / P4_sankey
 2. Write `research/prediction_waterfall.json` (uses the analysis as input).
 3. Append the Sankey payload into `research/financial_analysis.json` so the locked HTML template's `sankeyActualData` / `sankeyForecastData` variables can be filled at P5.
 
-All three substeps must complete before `P2_6_qc_macro` reads either artifact — emit one `phase_exit` for `P2_analysis` only after all three are on disk. If you need a subagent for a complex analysis step, delegate to a fresh window with the `research` + `io` toolsets.
+After the three financial substeps, normalize `company_context_research.json` into `company_quality.json`, `country_lens.json`, and `metric_basis.json` using `skills_repo/er/references/company-country-context.md`. All six P2 artifacts must be on disk before one `phase_exit`. Metric Basis must cover all eight required metric keys; `not_comparable` with a sourced reason is valid, missing coverage is not.
 
 ### 11. P2.6 — macro QC peers, parallel
 
@@ -167,7 +168,7 @@ Apply the QC scoring math from `MEMORY.md` exactly: `weighted = 0.34·draft + 0.
 
 ### 13. P3.7_X_VALIDATE — cross-validation
 
-Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.py`). Output: `research/cross_validation.json`. CRITICAL findings (self-history YoY mismatch >5pp; sector_macro_identity in mode A) block the next phase.
+Delegate to `agents/cross_validator.md`, then run `python tools/research/validate_metric_basis.py --run-dir <run_dir>`. Outputs: `research/cross_validation.json` and `validation/metric_basis_validation.json`. Any CRITICAL cross-validation finding or metric-basis failure blocks the next phase.
 
 ### 14. P5 / P5.5 / P6 — report writing + validation
 
@@ -181,23 +182,23 @@ Delegate to `agents/cross_validator.md` (it uses `tools/audit/db_cross_validate.
 
 ### 15. P7..P11 — card pipeline (EP)
 
-Walk the EP pipeline from `skills_repo/ep/SKILL.md`. The card pack is **4 cards** (cover / Porter / 5-year + recent financials / CFA lens). Read `USER.md:cfa_progress` (a string like `"Level 2 - Fixed Income - Binomial Tree"`) if present; pass it through to every EP script invocation below with `--cfa-progress "<value>"` so Card 4's CFA-concept selector and its downstream validator both see the same concept. If `cfa_progress` is absent in `USER.md`, omit the flag — EP's selector falls back to its own default.
+Walk the EP pipeline from `skills_repo/ep/SKILL.md`. The active pack is **5 cards**: one-minute company / Porter / five-year financials / company quality / country lens. Card 1's two variables render on separate aligned lines; Card 2's context is a fixed causal chain, not four fact bullets. Schema v5 has no CFA selector or `--cfa-progress` path.
 
 1. **P7 logo** — delegate to `logo-production-agent.md`. Critical: it MUST save the logo into `output/.../cards/logo/` BEFORE setting `logo_asset_path`. If no official logo can be found, halt with an explanation.
-2. **P8 content** — delegate to `content-production-agent.md`; produces `cards/{stem}.card_slots.json` per the card-slots schema v3 (`cover_company_name_cn`, `intro_sentence`, `company_focus_paragraph`, `metrics_row`, `industry_paragraph`, `background_bullets`, `porter_scores`, `porter_evidence`, `five_year_arc`, `recent_financial_highlights`, `revenue_explainer_points`, `cfa_lens`, plus `logo_asset_path` set at P7). Card 4's merged CFA panel must include non-empty `cfa_lens.formula` (a real formula with `=` and operators) and non-empty `cfa_lens.company_calculation` (1-3 lines, ≥1 with a digit) — both are hard-rule slots in v3. The pre-v3 `cfa_lens.takeaway` slot is gone.
+2. **P8 content** — delegate to `content-production-agent.md`; produces schema-v5 `cards/{stem}.card_slots.json` and `cards/{stem}.card_slots_worker_notes.json`. Card 1 uses `one_minute_summary`; Card 4 uses four company-quality panels without a score; Card 5 uses the fixed six-dimension country mechanism. Every important visible claim has a sidecar record and calculations reference `metric_basis.json` by `basis_id`.
 3. **P8.5 hardcode audit** — delegate to `hardcode-audit-agent.md` to verify no boilerplate, no cross-report residue, every sentence has a company-specific anchor.
 4. **P9 layout** — delegate to `layout-fill-agent.md` to compress to char/pixel budgets (do not invent facts).
-5. **P10 Validator 1** — `python tools/photo/validate_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> [--cfa-progress "<USER.md:cfa_progress>"]`. Exit 0 required.
+5. **P10 Validator 1** — `python tools/photo/validate_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette>`. Exit 0 required; this also checks calculation basis ids against the run registry.
 6. **P10.5 Validator 2** — delegate to `validator-2-agent.md` with web tools enabled. Any change to `card_slots.json` → rerun P10. Loop cap = 3.
 7. **P10.7 RED TEAM** — fires **before** P11 render; cards do not yet exist as PNGs. Write `meta/red_team/P10_7_RED_TEAM.input.json` referencing the `card_slots.json` file, the source `research/*.json`, `cards/validator{1,2}_report.json`, and the upstream P5.7 red-team outputs (so attackers know what was already challenged at the report stage). **Do NOT** include rendered-card paths in the manifest — they don't exist yet. Delegate **in parallel** to `agents/attackers/red_team_numeric.md` and `agents/attackers/red_team_narrative.md` under their pre-render contracts: numeric attacks source-chain, basis/units, tolerance vs source JSONs, palette consistency, logo-path realizability, and *render-budget realizability* (will the value fit the card's char/pixel budget; will rounding shift mislead readers); narrative attacks Porter directionality, hidden assumptions, missing counter-evidence, and cross-card coherence. **Actual PNG OCR is P12 layer 2, not P10.7.** If either reports `summary.critical > 0`, loop back once to `P9_layout` (or `P8_content` when the defect is content-level, not layout-level) with both attackers' challenge lists combined. Red-team retry cap = 1 here. A second critical = halt.
-8. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards [--cfa-progress "<USER.md:cfa_progress>"]`. Verify 4 PNGs at 2160×2700.
+8. **P11 render** — `python tools/photo/render_cards.py --input <html> --slots <slots> --brand "金融豹" --palette <palette> --output-root <run_dir>/cards`. Verify all 5 PNGs at 2160×2700.
 9. **Artifact tree check** — `python tools/io/validate_run_artifacts.py --run-dir <run_dir>`. If it reports known misplaced root artifacts, rerun with `--fix`, then rerun without `--fix`. Unknown root artifacts are a delivery blocker until moved or deleted intentionally.
 
 ### 16. P12 — final post-card audit ★
 
 Delegate to `agents/post_card_auditor.md`. It runs four layers in order:
 1. `tools/audit/reconcile_numbers.py` — every numeric in `card_slots.json` matches its source JSON within tolerance (see `MEMORY.md`).
-2. `tools/audit/ocr_cards.py` — OCR the 4 PNGs; every key numeric appears in pixels.
+2. `tools/audit/ocr_cards.py` — OCR the 5 PNGs; Card 2 Porter, Card 3 financial panel, Card 4 valuation, and Card 5 country quantitative claims map to their correct pixels.
 3. `tools/audit/web_third_check.py` — emits a `pending` envelope of Top-3 priority targets. The `post_card_auditor` agent is expected to fill each target's `verification` / `source_url` / `source_value` via host web tools before the aggregator reads the file. **Honest status**: this layer is `fail_blocks: false` in `workflow_meta.json`; an unfilled `pending` envelope downgrades to `warn` rather than fail. Do not claim Top-3 was "verified" if you did not actually fill the envelope. A future PR may add a host-filled verification step that re-enables fail-block.
 4. `tools/audit/db_cross_validate.py` — cross-check vs DB history + peers + macro snapshot.
 5. `tools/audit/user_agent_pii.py` — verify `public_user_agent` exists when SEC email is active and scan captured request logs for the SEC email next to non-SEC URLs.
@@ -245,7 +246,7 @@ Print to the user (in `report_language`):
 - Number of WARNING items in QA_REPORT.md.
 - Number of new DB rows written and any peer-divergence flags.
 
-Do not list every intermediate JSON in the handoff unless the user asks for audit internals; the primary deliverables are the HTML report and four cards.
+Do not list every intermediate JSON in the handoff unless the user asks for audit internals; the primary deliverables are the HTML report and five cards.
 
 ## Rules of engagement
 

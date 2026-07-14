@@ -26,41 +26,44 @@ CARD_FILE_TO_INDEX = {
     "01_cover.png": 1,
     "02_porter.png": 2,
     "03_five_year_financials.png": 3,
-    "04_cfa_lens.png": 4,
+    "04_company_quality.png": 4,
+    "05_country_lens.png": 5,
 }
 
 # Slot keys → which card index they appear on (1-indexed).
-# `cfa_lens` is a nested dict; `_walk_numerics` recurses into it so the
-# dotted sub-keys are documentary only (and asserted by
-# tests/test_schema_v3_slot_keys.py to lock the v3 contract).
+# Nested v5 objects are recursively scanned so all visible quantitative claims
+# participate in OCR reconciliation.
 SLOT_TO_CARD = {
     "intro_sentence": 1,
-    "company_focus_paragraph": 1,
+    "one_minute_summary": 1,
     "metrics_row": 1,
-    "industry_paragraph": 1,
-    "background_bullets": 1,
+    "industry_paragraph": 2,
+    "background_bullets": 2,
     "porter_scores": 2,
     "porter_evidence": 2,
     "five_year_arc": 3,
-    "recent_financial_highlights": 3,
-    "revenue_explainer_points": 3,
-    "cfa_lens": 4,
-    "cfa_lens.formula": 4,
-    "cfa_lens.company_calculation": 4,
+    "financial_metrics_panel": 3,
+    "company_quality": 4,
+    "country_lens": 5,
 }
 
 # Slot keys whose missing numerics fail-block (paying-customer-critical)
 KEY_SLOT_KEYS = {
     "intro_sentence",
-    "company_focus_paragraph",
+    "one_minute_summary",
     "metrics_row",
     "porter_scores",
     "porter_evidence",
     "five_year_arc",
-    "recent_financial_highlights",
-    "revenue_explainer_points",
-    "cfa_lens",
+    "financial_metrics_panel",
+    "company_quality",
+    "country_lens",
 }
+
+# Visible provenance dates are useful context but are not business quantities.
+# Treating the hyphenated components of an ISO date as card claims creates false
+# failures such as ``-07`` even when the date is rendered correctly.
+OCR_METADATA_KEYS = {"as_of_date"}
 
 
 def detect_engine(prefer: Optional[str] = None) -> tuple[str, object]:
@@ -120,11 +123,27 @@ def value_appears_in_text(value: float, text: str) -> bool:
     for c in candidates:
         if c in text:
             return True
-    # tolerate ±5% rounding
-    for delta_factor in (0.99, 1.01, 0.95, 1.05):
-        v = value * delta_factor
-        if f"{v:.1f}" in text or f"{v:.0f}" in text:
-            return True
+    # Tesseract can confuse one glyph inside a large displayed number (for
+    # example 4178 → 4173).  Layer 1 already proves numerical equality; this
+    # OCR layer proves that the value was visibly rendered.  Compare every OCR
+    # numeric token inside the documented ±5% OCR tolerance rather than only
+    # testing four boundary points.
+    if abs(value) >= 10:
+        normalized = text.replace(",", "")
+        # Chinese OCR occasionally inserts a Latin glyph between adjacent
+        # digits (``23.7`` → ``2Z3.7``).  Remove only a single ASCII letter
+        # bounded by digits; ordinary prose remains untouched.
+        normalized = re.sub(r"(?<=\d)[A-Za-z](?=\d)", "", normalized)
+        # OCR often glues a numeric token to a stray Latin glyph from a nearby
+        # Chinese character.  Forbid only a preceding digit so ``KE23.7`` is
+        # still recoverable while we never start in the middle of ``123.7``.
+        for raw in re.findall(r"(?<!\d)[+-]?\d+(?:\.\d+)?", normalized):
+            try:
+                observed = float(raw)
+            except ValueError:
+                continue
+            if abs(observed - value) <= abs(value) * 0.05:
+                return True
     return False
 
 
@@ -144,6 +163,8 @@ def _walk_numerics(slot_key: str, path: str, value, sink: list[tuple[str, Numeri
                 _walk_numerics(slot_key, child_path, item, sink)
     elif isinstance(value, dict):
         for k, v in value.items():
+            if k in OCR_METADATA_KEYS:
+                continue
             _walk_numerics(slot_key, f"{path}.{k}", v, sink)
     elif isinstance(value, (int, float)) and not isinstance(value, bool):
         sink.append((slot_key, NumericToken(raw=str(value), value=float(value), unit=None,
@@ -152,7 +173,7 @@ def _walk_numerics(slot_key: str, path: str, value, sink: list[tuple[str, Numeri
 
 def collect_card_numerics(slots: dict) -> dict[int, list[tuple[str, NumericToken]]]:
     """Map card_index → [(slot_key, NumericToken)] from card_slots.json."""
-    by_card: dict[int, list[tuple[str, NumericToken]]] = {i: [] for i in range(1, 5)}
+    by_card: dict[int, list[tuple[str, NumericToken]]] = {i: [] for i in range(1, 6)}
     for key, value in slots.items():
         card_idx = SLOT_TO_CARD.get(key)
         if not card_idx:

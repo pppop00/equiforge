@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-description: Visual diagram of the Anamnesis Research 35-phase pipeline. Shows the incident-loop bracket, P0 gates, parallel research, QC peers, red-team attackers, P12 audit, and the dual-gate (P12 + postcheck) before P_DB_INDEX. Source-of-truth for sequencing remains workflow_meta.json — this diagram is a reading aid, not a contract.
+description: Visual diagram of the Anamnesis Research 33-phase pipeline. Shows the incident-loop bracket, P0 gates, parallel research, QC peers, red-team attackers, P12 audit, and the dual-gate (P12 + postcheck) before P_DB_INDEX. Source-of-truth for sequencing remains workflow_meta.json — this diagram is a reading aid, not a contract.
 ---
 
 # Anamnesis Research — workflow diagram
@@ -86,7 +86,7 @@ flowchart TD
     P9 --> P10[P10 Validator 1<br/>validate_cards.py]
     P10 --> P105[P10.5 Validator 2<br/>web fact-check]
     P105 -->|"change ↩ cap=3"| P10
-    P105 -->|stable| P106[P10.6 voice_gate<br/>Cards 1-4 worker notes]
+    P105 -->|stable| P106[P10.6 evidence gate<br/>Cards 1-5 claim provenance]
     P106 -->|"critical ↩ cap=1"| P8
 
     %% ====== P10.7 RED TEAM ======
@@ -100,7 +100,7 @@ flowchart TD
     P107join -->|0 critical| P11
 
     %% ====== P11 RENDER ======
-    P11[P11 render_cards.py<br/>4 PNGs · 2160×2700 · palette = P0_palette]
+    P11[P11 render_cards.py<br/>5 PNGs · 2160×2700 · palette = P0_palette]
 
     %% ====== P12 FOUR-LAYER AUDIT ======
     P11 --> P12[P12 final_audit ★<br/>post_card_auditor]
@@ -116,7 +116,7 @@ flowchart TD
 
     %% ====== DB INDEX ======
     PDB[P_DB_INDEX<br/>requires: P12 pass AND postcheck pass<br/>single transaction · rollback on failure]
-    PDB --> Done([✅ Deliver: HTML + 4 PNGs + DB rows + QA report])
+    PDB --> Done([✅ Deliver: HTML + 5 PNGs + DB rows + QA report])
 
     %% ====== STYLES ======
     classDef bracket fill:#fff3cd,stroke:#b8860b,stroke-width:2px,color:#000
@@ -162,11 +162,11 @@ flowchart TD
 | Red-team manifests | `meta/red_team/{phase_id}.input.json` |
 | Red-team verdicts | `validation/red_team_{numeric,narrative}_{phase}.json` |
 | Porter depth gate | `validation/porter_depth_gate.json` |
-| Cards 1-4 voice gate | `validation/voice_gate.json` |
+| Cards 1-5 evidence gate | `validation/voice_gate.json` |
 | P12 audit + QA report | `validation/post_card_audit.json` + `validation/QA_REPORT.md` |
 | Incident post-check verdict | `validation/incident_postcheck.json` |
 | HTML report | `research/{Company}_Research_{LANG}.html` |
-| 4 PNGs | `cards/0{1..4}_*.png` |
+| 5 PNGs | `cards/0{1..5}_*.png` |
 | DB write summary | `db_export/rows_written.json` |
 
 ## What the colours mean (in the rendered diagram)

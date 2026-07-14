@@ -1,8 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
-> The workspace-level `../CLAUDE.md` routes between three sibling repos. This file covers what you need when working **inside** `anamnesis-research/` itself. The parent doc takes precedence on cross-repo questions (e.g. why you must not edit `skills_repo/{er,ep}/` copies — those are submodule-managed).
+> The workspace-level `../AGENTS.md` routes between three sibling repos. This file covers what you need when working **inside** `anamnesis-research/` itself. The parent doc takes precedence on cross-repo questions (e.g. why you must not edit `skills_repo/{er,ep}/` copies — those are submodule-managed).
 
 ## Two contracts, one repo
 
@@ -63,7 +63,7 @@ pytest tests/test_reconcile_numbers.py -v  # numerical tolerance enforcement
 pytest tests/test_db_migrations.py -v      # cold + existing DB
 pytest tests/test_queries_cold_start.py    # DB precheck cold-start contract
 pytest tests/test_incident_loop.py -v      # P_INCIDENT_PRE/POSTCHECK contract
-pytest tests/test_skill_mount_parity.py -v # SKILL.md ≡ .claude/skills/.../SKILL.md
+pytest tests/test_skill_mount_parity.py -v # SKILL.md ≡ .Codex/skills/.../SKILL.md
 pytest tests/test_skill_resolution.py -v   # ER/EP wrappers must NOT fall back to sibling working copies
 ```
 
@@ -73,7 +73,7 @@ pytest tests/test_skill_resolution.py -v   # ER/EP wrappers must NOT fall back t
 
 The repo's distinguishing methodology is **CFRV** — Curate → Freeze → Read → Verify — wrapped around every run:
 
-- **Outer loop, across runs.** New failure modes are captured only via `/log-incident` (slash command spec at `.claude/commands/log-incident.md`, backend at `tools/io/log_incident.py`). The model drafts an `I-NNN` entry from the latest run digest; the user confirms before append. `INCIDENTS.md` is append-only — never edit by hand, never auto-append.
+- **Outer loop, across runs.** New failure modes are captured only via `/log-incident` (slash command spec at `.Codex/commands/log-incident.md`, backend at `tools/io/log_incident.py`). The model drafts an `I-NNN` entry from the latest run digest; the user confirms before append. `INCIDENTS.md` is append-only — never edit by hand, never auto-append.
 - **Inner loop, within one run.** `P_INCIDENT_PRECHECK` reads `INCIDENTS.md` end-to-end and emits `incident_precheck.acknowledged` events to `meta/run.jsonl` (one per entry; `incident_precheck.skipped` carries a `superseded_by` pointer for `Status: superseded` entries). `P_INCIDENT_POSTCHECK` re-checks every entry's detection signal after `P12_final_audit`. **A flagged post-check blocks `P_DB_INDEX`** — relapse on a known incident is release-blocking. The two loops connect at exactly two files: `INCIDENTS.md` (institutional log) and `meta/system_prompt.frozen.txt` (per-run snapshot).
 
 ### P0 gates — blocking, not skippable
@@ -111,11 +111,11 @@ Every run lives under `output/{Company}_{Date}_{RunID}/` (gitignored). Two files
 
 Schema-valid outputs already on disk are reused — no double-billing the LLM.
 
-### Three hook/skill surfaces under `.claude/` (with `.codex/` and `.cursor/` parallels)
+### Three hook/skill surfaces under `.Codex/` (with `.codex/` and `.cursor/` parallels)
 
-1. `.claude/skills/anamnesis-research/SKILL.md` — project skill mount (auto-discovery). Must stay in description-sync with the root `SKILL.md` (test: `tests/test_skill_mount_parity.py`).
-2. `.claude/settings.json` + `.claude/hooks/inject_incidents.py` — `UserPromptSubmit` hook. Injects an `INCIDENTS.md` reminder on research-style prompts (EN/ZH). The hook is a safety net, not a substitute — `P_INCIDENT_PRECHECK` must still run.
-3. `.claude/commands/log-incident.md` — the `/log-incident` slash command (the Curate beat).
+1. `.Codex/skills/anamnesis-research/SKILL.md` — project skill mount (auto-discovery). Must stay in description-sync with the root `SKILL.md` (test: `tests/test_skill_mount_parity.py`).
+2. `.Codex/settings.json` + `.Codex/hooks/inject_incidents.py` — `UserPromptSubmit` hook. Injects an `INCIDENTS.md` reminder on research-style prompts (EN/ZH). The hook is a safety net, not a substitute — `P_INCIDENT_PRECHECK` must still run.
+3. `.Codex/commands/log-incident.md` — the `/log-incident` slash command (the Curate beat).
 
 Parallel surfaces for other agents (the Curate beat must work from any of them, since users may /log-incident from whichever harness ran the failing session):
 
@@ -138,7 +138,7 @@ Single-source-of-truth is intentional. Same rule in five files = drift risk; one
 Maintainer-facing additions specific to this file:
 
 - **Phase-advance watchdog discipline.** Runtime phase advancement is externalised via `python anamnesis.py advance --run-dir <X>` (`tools/io/advance.py`). If you change `workflow_meta.json` phase order, retry targets, or `blocking` flags, also re-run `pytest -q` and verify `GATE_SOURCE_WHITELIST` in `tools/io/advance.py` still matches `references/p0_gates.md`.
-- **Hook substance lives in `tools/io/incident_trigger.py`.** Both `.claude/hooks/inject_incidents.py` and `.codex/hooks/inject_incidents.py` are thin adapters over this module. Edit the shared module, not the per-host shells.
+- **Hook substance lives in `tools/io/incident_trigger.py`.** Both `.Codex/hooks/inject_incidents.py` and `.codex/hooks/inject_incidents.py` are thin adapters over this module. Edit the shared module, not the per-host shells.
 
 ## Numerical tolerances (P12 layer 1) — change in two places
 

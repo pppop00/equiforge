@@ -94,8 +94,8 @@ def test_migrate_upgrades_existing_v1_card_slots(tmp_path: Path) -> None:
 
     result = migrate.apply_migrations(db)
     assert result["previous_version"] == 1
-    assert result["applied"] == [2]
-    assert result["current_version"] >= 2
+    assert result["applied"] == [2, 3]
+    assert result["current_version"] >= 3
 
     conn = sqlite3.connect(db)
     try:
@@ -104,6 +104,8 @@ def test_migrate_upgrades_existing_v1_card_slots(tmp_path: Path) -> None:
         }
         assert "cfa_lens_formula" in columns
         assert "cfa_lens_calculation" in columns
+        for table in ("claim_evidence", "metric_basis_period", "company_quality_observations", "country_lens_observations"):
+            assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
     finally:
         conn.close()
 
@@ -124,8 +126,8 @@ def test_migrate_marks_card4_v3_when_columns_already_exist(tmp_path: Path) -> No
 
     result = migrate.apply_migrations(db)
     assert result["previous_version"] == 1
-    assert result["applied"] == [2]
-    assert result["current_version"] >= 2
+    assert result["applied"] == [2, 3]
+    assert result["current_version"] >= 3
 
     conn = sqlite3.connect(db)
     try:

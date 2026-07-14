@@ -31,6 +31,7 @@ from tools.db import migrate  # noqa: E402
 DEFAULT_DB = PROJECT_ROOT / "db" / "equity_kb.sqlite"
 
 EMAIL_IN_PARENS_RE = re.compile(r"\([^)]*@[^)]*\)")
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PORTER_FORCES = ("supplier", "buyer", "entrant", "substitute", "rivalry")
 MACRO_SLOTS = ("rate", "gdp", "inflation", "fx", "oil", "consumer_confidence")
 
@@ -52,7 +53,24 @@ def _read_json(path: Path) -> Optional[dict]:
 def _scrub_email(s: Optional[str]) -> Optional[str]:
     if not s:
         return s
-    return EMAIL_IN_PARENS_RE.sub("()", s)
+    return EMAIL_RE.sub("[redacted-email]", EMAIL_IN_PARENS_RE.sub("()", s))
+
+
+def _scrub_value(value: Any) -> Any:
+    """Recursively scrub SEC contact emails before new TEXT/JSON persistence."""
+    if isinstance(value, str):
+        return _scrub_email(value)
+    if isinstance(value, list):
+        return [_scrub_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _scrub_value(item) for key, item in value.items()}
+    return value
+
+
+def _json_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return json.dumps(_scrub_value(value), ensure_ascii=False)
 
 
 def _g(d: Any, *keys, default=None) -> Any:
@@ -182,10 +200,15 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
     qc = _read_json(research / "qc_audit_trail.json") or {}
     fv = _read_json(research / "final_report_data_validation.json") or {}
     sc = _read_json(research / "structure_conformance.json") or {}
+    cq = _read_json(research / "company_quality.json") or {}
+    cl = _read_json(research / "country_lens.json") or {}
+    mb = _read_json(research / "metric_basis.json") or {}
 
     cards_dir = run_dir / "cards"
     card_slots_files = list(cards_dir.glob("*.card_slots.json"))
     cs = _read_json(card_slots_files[0]) if card_slots_files else None
+    worker_notes_files = list(cards_dir.glob("*.card_slots_worker_notes.json"))
+    worker_notes = _read_json(worker_notes_files[0]) if worker_notes_files else None
 
     # Identity
     ticker = meta.get("ticker") or _g(fd, "ticker") or _g(meta, "slug")
@@ -595,15 +618,89 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
                 )
                 result.bump("edge_insights")
 
+            # schema-v5 claim evidence
+            for claim in (worker_notes or {}).get("claims", []):
+                if not isinstance(claim, dict) or not claim.get("claim_id"):
+                    continue
+                conn.execute(
+                    """INSERT OR REPLACE INTO claim_evidence (
+                           run_id, ticker, claim_id, slot_path, epistemic_type,
+                           source_refs_json, as_of_date, basis_id, falsifier
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (run_id, ticker, claim.get("claim_id"), claim.get("slot_path"),
+                     claim.get("epistemic_type"), _json_text(claim.get("source_refs") or []),
+                     claim.get("as_of_date"), claim.get("basis_id"),
+                     _scrub_email(claim.get("falsifier"))),
+                )
+                result.bump("claim_evidence")
+
+            # metric basis registry
+            for basis in mb.get("bases", []):
+                if not isinstance(basis, dict) or not basis.get("basis_id"):
+                    continue
+                conn.execute(
+                    """INSERT OR REPLACE INTO metric_basis_period (
+                           ticker, fiscal_period, basis_id, metric_key, company_label,
+                           company_definition, standardized_formula, currency, unit,
+                           comparability, adjustment_note, source_refs_json, as_of_date,
+                           source_run_id
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (ticker, basis.get("period") or fiscal_period, basis.get("basis_id"),
+                     basis.get("metric_key"), _scrub_email(basis.get("company_label")),
+                     _scrub_email(basis.get("company_definition")),
+                     _scrub_email(basis.get("standardized_formula")), basis.get("currency"),
+                     basis.get("unit"), basis.get("comparability"),
+                     _scrub_email(basis.get("adjustment_note")),
+                     _json_text(basis.get("source_refs") or []),
+                     basis.get("as_of_date") or mb.get("as_of_date"), run_id),
+                )
+                result.bump("metric_basis_period")
+
+            # company quality observations
+            for observation_type in ("valuation", "governance_incentives", "capital_allocation", "accounting_quality"):
+                observation = cq.get(observation_type)
+                if not isinstance(observation, dict):
+                    continue
+                conn.execute(
+                    """INSERT OR REPLACE INTO company_quality_observations (
+                           run_id, ticker, observation_type, finding, evidence, watch_item,
+                           status, metrics_json, source_refs_json, as_of_date
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (run_id, ticker, observation_type, _scrub_email(observation.get("finding")),
+                     _scrub_email(observation.get("evidence")),
+                     _scrub_email(observation.get("watch_item")), observation.get("status"),
+                     _json_text(observation.get("metrics")),
+                     _json_text(observation.get("source_refs")),
+                     observation.get("as_of_date") or cq.get("as_of_date")),
+                )
+                result.bump("company_quality_observations")
+
+            # country lens observations
+            for dimension in cl.get("dimensions", []):
+                if not isinstance(dimension, dict) or not dimension.get("key"):
+                    continue
+                conn.execute(
+                    """INSERT OR REPLACE INTO country_lens_observations (
+                           run_id, ticker, dimension_key, country_fact, company_transmission,
+                           watch_metric, status, source_refs_json, as_of_date
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (run_id, ticker, dimension.get("key"),
+                     _scrub_email(dimension.get("country_fact")),
+                     _scrub_email(dimension.get("company_transmission")),
+                     _scrub_email(dimension.get("watch_metric")), dimension.get("status"),
+                     _json_text(dimension.get("source_refs")),
+                     dimension.get("as_of_date") or cl.get("as_of_date")),
+                )
+                result.bump("country_lens_observations")
+
             # card_slots
             if cs:
                 paths_by_n = {}
-                for n in range(1, 5):
+                for n in range(1, 6):
                     candidates = list(cards_dir.glob(f"{n:02d}_*.png"))
                     paths_by_n[n] = str(candidates[0]) if candidates else None
-                # Card 4 v3 stores formula/calculation in dedicated columns.
-                # The pack is now 4 PNGs, so card5/card6 and legacy deleted-slot
-                # columns remain NULL for new rows.
+                # Historical CFA columns remain for archived schema-v3/v4 rows;
+                # schema v5 leaves them NULL and writes company/country PNGs to card4/card5.
                 cfa_lens = cs.get("cfa_lens") if isinstance(cs.get("cfa_lens"), dict) else {}
                 cfa_formula = cfa_lens.get("formula") if isinstance(cfa_lens, dict) else None
                 cfa_calc_raw = cfa_lens.get("company_calculation") if isinstance(cfa_lens, dict) else None
@@ -620,11 +717,11 @@ def index_run(run_dir: Path, db_path: Path) -> IndexResult:
                            card4_png_path, card5_png_path, card6_png_path,
                            cfa_lens_formula, cfa_lens_calculation
                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (ticker, run_id, json.dumps(cs, ensure_ascii=False),
-                     cs.get("company_focus_paragraph"), None,
+                    (ticker, run_id, _json_text(cs),
+                     _g(cs, "one_minute_summary", "business_model") or cs.get("company_focus_paragraph"), None,
                      None,
                      paths_by_n[1], paths_by_n[2], paths_by_n[3],
-                     paths_by_n[4], None, None,
+                     paths_by_n[4], paths_by_n[5], None,
                      cfa_formula, cfa_calc),
                 )
                 result.bump("card_slots")
