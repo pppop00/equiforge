@@ -19,7 +19,7 @@ New runs produce five continuous cards:
 2. `02_porter.png` — industry forces and external variables
 3. `03_five_year_financials.png` — how the business model becomes financial results
 4. `04_company_quality.png` — valuation, governance, capital allocation, and accounting quality
-5. `05_country_lens.png` — understanding a country through the company
+5. `05_country_lens.png` — how institutions and culture shape the company
 
 The locked HTML report remains the evidence and audit base. Its page skeleton was not changed.
 
@@ -48,7 +48,7 @@ The v5 design therefore makes four changes:
 - Card 2 retains Porter but requires an ordered chain: external condition → transmission → company outcome → watch signal. The former section heading was removed to give each step a larger measured row and prevent overlap.
 - Card 3 connects the five-year business shift to revenue, profit, and cash flow. Its quantitative panel participates in P12 reconciliation and OCR.
 - Card 4 is a 2×2 company-quality panel without a synthetic score.
-- Card 5 separates incorporation, listing, operations, and revenue exposure, then applies six country dimensions as country fact → company transmission → observable metric.
+- Card 5 is titled `国家如何塑造公司` in Chinese and `How institutions and culture shape the company` in English. It separates incorporation, listing, operations, and revenue exposure, then applies six country dimensions as country fact → company transmission → observable metric.
 
 ## Harness, audit, and persistence changes
 
