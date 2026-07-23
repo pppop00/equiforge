@@ -57,8 +57,30 @@ def load_research_numerics(research_dir: Path) -> list[NumericToken]:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
+        unit_hint = ""
+        if fname == "financial_data.json":
+            unit_hint = str(data.get("income_statement", {}).get("unit", "")).lower()
         for jpath, text in walk_strings(data, fname):
-            out.extend(extract_numerics(text, path=jpath))
+            for tok in extract_numerics(text, path=jpath):
+                if unit_hint and "billion" in unit_hint and tok.unit is None:
+                    if any(
+                        key in jpath
+                        for key in (
+                            "revenue",
+                            "income",
+                            "cash_flow",
+                            "capex",
+                            "balance_sheet",
+                            "net_cash",
+                            "operating_cash",
+                            "gross_profit",
+                            "cogs",
+                            "sales",
+                            "operating_profit",
+                        )
+                    ):
+                        tok.unit = "billion"
+                out.append(tok)
     return out
 
 

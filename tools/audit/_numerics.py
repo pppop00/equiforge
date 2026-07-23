@@ -92,6 +92,11 @@ def extract_numerics(text: str, path: str = "") -> list[NumericToken]:
         except ValueError:
             continue
         unit = detect_unit_after(text, m.end())
+        if unit is None and path:
+            if path.endswith("_pct") or "margin_pct" in path or path.endswith("_margin"):
+                unit = "pct"
+            elif path.endswith("_pp") or "pp" in path.split(".")[-1]:
+                unit = "pp"
         # Skip year-shaped 4-digit ints with no unit context — too noisy
         if unit is None and 1900 <= v <= 2100 and "." not in raw:
             continue

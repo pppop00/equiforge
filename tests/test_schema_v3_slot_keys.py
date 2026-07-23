@@ -43,6 +43,9 @@ def test_ocr_uses_range_tolerance_and_ignores_provenance_dates() -> None:
     module = _module()
     assert module.value_appears_in_text(4178.0, "FCFF 4173亿")
     assert module.value_appears_in_text(23.7, "现金流同比下降2Z3.7%")
+    # Tesseract often drops the decimal on large display metrics.
+    assert module.value_appears_in_text(29.6, "784 |296 |1.2x")
+    assert module.value_appears_in_text(78.4, "784 |296 |1.2x")
 
     slots = {
         "company_quality": {

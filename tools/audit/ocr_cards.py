@@ -144,6 +144,12 @@ def value_appears_in_text(value: float, text: str) -> bool:
                 continue
             if abs(observed - value) <= abs(value) * 0.05:
                 return True
+            # Large display digits often lose the decimal point under
+            # Tesseract (29.6 → 296, 78.4 → 784). Accept a ×10 collapse when
+            # the expected value is fractional and the OCR token has no dot.
+            if abs(value - int(value)) > 1e-9 and "." not in raw:
+                if abs(observed / 10.0 - value) <= abs(value) * 0.05:
+                    return True
     return False
 
 

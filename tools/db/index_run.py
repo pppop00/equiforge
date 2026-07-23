@@ -53,6 +53,12 @@ def _read_json(path: Path) -> Optional[dict]:
 def _scrub_email(s: Optional[str]) -> Optional[str]:
     if not s:
         return s
+    if not isinstance(s, str):
+        # Writers sometimes emit evidence as a list of bullets; persist as text.
+        if isinstance(s, list):
+            s = "；".join(str(x) for x in s if x is not None)
+        else:
+            s = str(s)
     return EMAIL_RE.sub("[redacted-email]", EMAIL_IN_PARENS_RE.sub("()", s))
 
 

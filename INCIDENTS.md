@@ -183,6 +183,20 @@ Institutional memory of failure. Each entry is a real incident + the load-bearin
 
 ---
 
+## I-013 — Card 3 renderer labels KRW billions as 亿美元 (plus margin display consistency)
+
+- **Date observed:** 2026-07-15
+- **Phase:** `P11_render` (also surfaces at `P12_final_audit` OCR; Card 1/3 slot prose at `P8_content`)
+- **What happened:** In `output/Samsung_Electronics_2026-07-15_84dc556b/cards/03_five_year_financials.png` and `output/SK_Hynix_2026-07-15_8491536a/cards/03_five_year_financials.png`, the middle-band bars showed magnitudes such as `3336.1 亿美元` / `971.5 亿美元` while authored Card 3 prose correctly used 万亿韩元 (`333.6` / `97.1`). OCR under `validation/ocr_dump/card_3.txt` confirmed the wrong currency suffix. Separately, SK hynix Card 1/3 showed Q1 营业利润率 `72.0%` / 净利率 `77.0%` (company IR rounded) beside absolute amounts rounded to one decimal (`52.6` / `37.6` / `40.3` 万亿), which recompute to ~71.5% / ~76.6% and fail reader cross-checks.
+- **Root cause:** (1) `set_currency_label()` had no `KRW` mapping and defaulted unknown currencies to `美元`. `income_statement.unit = "billions KRW"` did not trigger the native-`yi` scale path (only substrings `亿元` / `亿人民币`), so amounts were treated as millions and divided by 100 into `亿` labels. Card 3 bars used `f"{value:.1f} 亿{_CURRENCY_LABEL}"` instead of a currency+scale-aware formatter. (2) Margin cells copied IR’s one-point rounded percentages without ensuring they match the absolute amounts shown on the same card pack within ±0.5pp.
+- **Rule (load-bearing):**
+  - Renderer money labels MUST honor `financial_data.currency` (including `KRW` → `韩元`) and `income_statement.unit` scale (`millions` / `billions` / `亿元`-native). Card 1/3 renderer-generated amounts MUST NOT print a currency different from `financial_data.currency`, nor a magnitude that disagrees with authored 万亿/亿/千亿 prose beyond tolerance.
+  - When absolute amounts and a margin/ratio appear together on cards, either (a) the margin MUST equal amount-implied margin within ±0.5pp, or (b) the margin MUST be explicitly marked as company-rounded disclosure (e.g. `约72%（公司披露）`) and not presented as a freshly computed figure from the displayed absolutes.
+- **Detection:** P12 OCR / Validator 1: if `currency == KRW` (or any non-USD), fail when rendered Card 3 bar labels contain `美元`, or when bar magnitude × claimed unit disagrees with `income_statement.current_year.revenue` and Card 3 prose within tolerance. Also fail when a visible margin and its sibling absolute amounts disagree by >0.5pp without an explicit company-rounded qualifier. Regression: EP `set_currency_label` + Card 3 bar formatter + Anamnesis wrapper tests for KRW billions.
+- **Related contract:** `skills_repo/ep/scripts/generate_social_cards.py` (`set_currency_label`, `money_text`, `chart_value_as_yi`, `card_3`); `tools/photo/render_cards.py`; `tools/audit/ocr_cards.py`; `INCIDENTS.md` I-009 (related family — magnitude/KPI drift; does not supersede; this entry covers currency default + billions scale + margin/absolute consistency).
+
+---
+
 ## How this file is used
 
 1. **Pre-run** (`P_INCIDENT_PRECHECK`, before `P0_intent`): orchestrator reads end-to-end. For each incident it confirms the rule is wired into the current plan and logs `incident_precheck.acknowledged` to `meta/run.jsonl`. Novel-looking matches against the current target raise the bar in downstream phases.

@@ -53,6 +53,7 @@ These four rules all stem from the same failure family (`INCIDENTS.md` I-002): t
   - currency amounts: ±0.5% relative
   - growth rates: ±0.5pp
   - prices, share counts, or any value tagged `"exact": true`: 0 tolerance
+- **EP money labels follow `financial_data.currency` + unit scale** (`INCIDENTS.md` I-013). `KRW` → `韩元`; `billions` must not be formatted as millions→`亿美元`. Card-visible margins must match sibling absolute amounts within ±0.5pp or be explicitly marked as company-rounded disclosure.
 
 ## QC scoring math (P3.6) — plan v3 single perspective
 

@@ -57,6 +57,7 @@ Operational rules unique to your run-time behaviour (not duplicated in MEMORY.md
 
 - **Halt and ask** at the interactive P0 gates (`P0_lang` / `P0_sec_email` / `P0_palette`) if no user reply and no `USER.md` sticky exists. The `anamnesis.py advance` watchdog will refuse to move past these gates on a non-whitelisted source — do not work around it.
 - **Never write to DB on failure** — `P_DB_INDEX` runs only when `P12_final_audit` is `pass`/`warn` AND `P_INCIDENT_POSTCHECK` reports `flagged: []`. The advance watchdog will not advance you past `P_INCIDENT_POSTCHECK` if either is failing.
+- **Keep Card 4/5 visible copy renderer-safe.** In Chinese Card 4 formulas, write `经营现金流减资本开支` or `OCF - Capex`; never put Unicode mathematical minus `−` (U+2212) in card-visible copy. On Card 5, the causal arrow and the `公司级预警` / `国家观察` labels already signal interpretation: omit repeated `据此推断` openers, keep warning items free of terminal separators before composition, and reject awkward word order such as `把……易误读为……`.
 
 ## Commands you will run
 
